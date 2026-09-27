@@ -61,6 +61,7 @@ import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Display;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -1126,6 +1127,7 @@ public class ScummVMActivity extends Activity {
 	}
 
 	private MyScummVM _scummvm;
+	private BottomScreenPresentation _bottomScreen;
 	private ScummVMEvents _events;
 	private Thread _scummvm_thread;
 
@@ -1361,6 +1363,35 @@ public class ScummVMActivity extends Activity {
 		_main_surface.captureMouse(true);
 
 		_pluginBroadcastReceiver.register(this);
+
+		showBottomScreen();
+	}
+
+	// Put the game's interface on a second screen, when the device has one
+	private void showBottomScreen() {
+		if (_scummvm == null || _bottomScreen != null) {
+			return;
+		}
+
+		Display display = BottomScreenPresentation.findSecondScreen(this);
+		if (display == null) {
+			return;
+		}
+
+		try {
+			_bottomScreen = new BottomScreenPresentation(this, display, _scummvm);
+			_bottomScreen.show();
+		} catch (WindowManager.InvalidDisplayException e) {
+			Log.w(ScummVM.LOG_TAG, "Could not show second screen", e);
+			_bottomScreen = null;
+		}
+	}
+
+	private void hideBottomScreen() {
+		if (_bottomScreen != null) {
+			_bottomScreen.dismiss();
+			_bottomScreen = null;
+		}
 	}
 
 	@Override
@@ -1370,6 +1401,8 @@ public class ScummVMActivity extends Activity {
 //		_isPaused = true;
 
 		super.onPause();
+
+		hideBottomScreen();
 
 		_pluginBroadcastReceiver.unregister(this);
 

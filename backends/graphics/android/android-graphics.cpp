@@ -45,12 +45,18 @@
 #include "graphics/blit.h"
 #include "graphics/managed_surface.h"
 
+#include <android/native_window.h>
+
 //
 // AndroidGraphicsManager
 //
 AndroidGraphicsManager::AndroidGraphicsManager() :
 	_touchcontrols(nullptr),
-	_old_touch_mode(OSystem_Android::TOUCH_MODE_TOUCHPAD) {
+	_old_touch_mode(OSystem_Android::TOUCH_MODE_TOUCHPAD),
+	_bottomScreenChangeId(-1),
+	_bottomWidth(0),
+	_bottomHeight(0),
+	_bottomNeedsRedraw(false) {
 	ENTER();
 
 	// Initialize our OpenGL ES context.
@@ -153,7 +159,286 @@ void AndroidGraphicsManager::updateScreen() {
 	// Sets _forceRedraw if needed
 	dynamic_cast<OSystem_Android *>(g_system)->getTouchControls().beforeDraw();
 
+	syncBottomScreen();
+
+	// The base class clears these, so check them first
+	const bool bottomDirty = _bottomNeedsRedraw || _forceRedraw || _cursorNeedsRedraw ||
+		(_gameScreen && _gameScreen->isDirty());
+
 	OpenGLGraphicsManager::updateScreen();
+
+	if (bottomDirty && isSecondScreenActive()) {
+		drawBottomScreen();
+		_bottomNeedsRedraw = false;
+	}
+}
+
+bool AndroidGraphicsManager::isSecondScreenActive() const {
+	return !_secondScreenPanels.empty() && _bottomWidth > 0 && _bottomHeight > 0 &&
+		_gameScreen && _rotationMode == Common::kRotationNormal;
+}
+
+void AndroidGraphicsManager::setSecondScreenLayout(const Common::Array<Common::Rect> &panels) {
+	if (panels == _secondScreenPanels)
+		return;
+
+	_secondScreenPanels = panels;
+	recalculateDisplayAreas();
+	recalculateCursorScaling();
+	_bottomNeedsRedraw = true;
+}
+
+// Pick up a new, resized or lost second screen surface from the Java side
+void AndroidGraphicsManager::syncBottomScreen() {
+	if (_bottomScreenChangeId == JNI::bottom_screen_changeid)
+		return;
+
+	ANativeWindow *window = JNI::lockBottomScreen();
+	_bottomScreenChangeId = JNI::bottom_screen_changeid;
+	_bottomWidth = _bottomHeight = 0;
+	if (window) {
+		_bottomWidth = ANativeWindow_getWidth(window);
+		_bottomHeight = ANativeWindow_getHeight(window);
+		if (ANativeWindow_setBuffersGeometry(window, _bottomWidth, _bottomHeight, WINDOW_FORMAT_RGBX_8888) != 0)
+			_bottomWidth = _bottomHeight = 0;
+	}
+	JNI::unlockBottomScreen();
+
+	LOGD("second screen is now %dx%d", _bottomWidth, _bottomHeight);
+
+	recalculateDisplayAreas();
+	recalculateCursorScaling();
+	_bottomNeedsRedraw = true;
+}
+
+// Stack the panels top to bottom on the second screen, as large as they fit.
+// Full width panels (e.g. the sentence line) are scaled to the screen width,
+// narrower ones (e.g. verbs and inventory side by side) share one larger scale.
+void AndroidGraphicsManager::layoutBottomScreen() {
+	_bottomPanelRects.clear();
+	if (_secondScreenPanels.empty() || _bottomWidth <= 0 || _bottomHeight <= 0 || !_gameScreen)
+		return;
+
+	const int gameWidth = getWidth();
+	const int gameHeight = getHeight();
+
+	// Height of a game pixel relative to its width, from aspect ratio correction
+	const float pixelAspect = (float)intToFrac(gameWidth) / gameHeight / getDesiredGameAspectRatio();
+
+	const float margin = 0.96f;
+	const float fullScale = margin * _bottomWidth / gameWidth;
+	float splitScale = 0.0f;
+	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
+		const int w = _secondScreenPanels[i].width();
+		if (w > 0 && w < gameWidth) {
+			const float s = margin * _bottomWidth / w;
+			splitScale = (splitScale == 0.0f) ? s : MIN(splitScale, s);
+		}
+	}
+
+	Common::Array<float> scales;
+	float totalHeight = 0.0f;
+	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
+		const float s = (_secondScreenPanels[i].width() < gameWidth) ? splitScale : fullScale;
+		scales.push_back(s);
+		totalHeight += _secondScreenPanels[i].height() * s * pixelAspect;
+	}
+
+	const int gap = _bottomHeight / 40;
+	const int gaps = gap * (_secondScreenPanels.size() - 1);
+	const float available = margin * _bottomHeight - gaps;
+	const float shrink = (totalHeight > available) ? available / totalHeight : 1.0f;
+
+	int usedHeight = gaps;
+	Common::Array<Common::Point> sizes;
+	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
+		const Common::Rect &panel = _secondScreenPanels[i];
+		const int w = MAX(1, (int)(panel.width() * scales[i] * shrink));
+		const int h = MAX(1, (int)(panel.height() * scales[i] * shrink * pixelAspect));
+		sizes.push_back(Common::Point(w, h));
+		usedHeight += h;
+	}
+
+	int y = (_bottomHeight - usedHeight) / 2;
+	for (uint i = 0; i < sizes.size(); i++) {
+		const int x = (_bottomWidth - sizes[i].x) / 2;
+		_bottomPanelRects.push_back(Common::Rect(x, y, x + sizes[i].x, y + sizes[i].y));
+		y += sizes[i].y + gap;
+	}
+}
+
+static inline uint32 packRGBX(byte r, byte g, byte b) {
+	// WINDOW_FORMAT_RGBX_8888 is R, G, B, X in memory
+#ifdef SCUMM_LITTLE_ENDIAN
+	return r | (g << 8) | (b << 16) | 0xFF000000;
+#else
+	return (r << 24) | (g << 16) | (b << 8) | 0xFF;
+#endif
+}
+
+void AndroidGraphicsManager::drawBottomScreen() {
+	if (_bottomPanelRects.size() != _secondScreenPanels.size())
+		return;
+
+	const Graphics::Surface *src = _gameScreen->getSurface();
+	if (!src || !src->getPixels())
+		return;
+
+	ANativeWindow *window = JNI::lockBottomScreen();
+	ANativeWindow_Buffer buffer;
+	if (!window || ANativeWindow_lock(window, &buffer, nullptr) != 0) {
+		JNI::unlockBottomScreen();
+		return;
+	}
+
+	const int width = MIN<int>(buffer.width, _bottomWidth);
+	const int height = MIN<int>(buffer.height, _bottomHeight);
+	uint32 *dst = (uint32 *)buffer.bits;
+	const uint32 black = packRGBX(0, 0, 0);
+	for (int y = 0; y < height; y++) {
+		uint32 *row = dst + y * buffer.stride;
+		for (int x = 0; x < width; x++)
+			row[x] = black;
+	}
+
+	uint32 palette[256];
+	if (src->format.isCLUT8()) {
+		for (int i = 0; i < 256; i++)
+			palette[i] = packRGBX(_gamePalette[i * 3], _gamePalette[i * 3 + 1], _gamePalette[i * 3 + 2]);
+	}
+
+	// Maps a game screen pixel to a packed color
+	auto gamePixel = [&](int x, int y) -> uint32 {
+		const byte *p = (const byte *)src->getBasePtr(x, y);
+		if (src->format.isCLUT8())
+			return palette[*p];
+		byte r, g, b;
+		src->format.colorToRGB(src->format.bytesPerPixel == 2 ? *(const uint16 *)p : *(const uint32 *)p, r, g, b);
+		return packRGBX(r, g, b);
+	};
+
+	// The cursor, in game coordinates, when it is over the second screen
+	const Graphics::Surface *cursor = nullptr;
+	Common::Rect cursorRect;
+	uint32 cursorPalette[256];
+	if (_cursorVisible && _cursor && !_overlayVisible) {
+		cursor = _cursor->getSurface();
+		const Common::Point pos = convertWindowToVirtual(_cursorX, _cursorY);
+		cursorRect = Common::Rect(pos.x - _cursorHotspotX, pos.y - _cursorHotspotY,
+		                          pos.x - _cursorHotspotX + cursor->w, pos.y - _cursorHotspotY + cursor->h);
+		if (cursor->format.isCLUT8()) {
+			const byte *pal = _cursorPaletteEnabled ? _cursorPalette : _gamePalette;
+			for (int i = 0; i < 256; i++)
+				cursorPalette[i] = packRGBX(pal[i * 3], pal[i * 3 + 1], pal[i * 3 + 2]);
+		}
+	}
+
+	// Returns whether the cursor covers this game pixel, and its color
+	auto cursorPixel = [&](int x, int y, uint32 &color) -> bool {
+		if (!cursor || !cursorRect.contains(x, y))
+			return false;
+		const byte *p = (const byte *)cursor->getBasePtr(x - cursorRect.left, y - cursorRect.top);
+		if (cursor->format.isCLUT8()) {
+			if (_cursorUseKey && *p == _cursorKeyColor)
+				return false;
+			color = cursorPalette[*p];
+			return true;
+		}
+		const uint32 raw = cursor->format.bytesPerPixel == 2 ? *(const uint16 *)p : *(const uint32 *)p;
+		if (_cursorUseKey && raw == _cursorKeyColor)
+			return false;
+		byte a, r, g, b;
+		cursor->format.colorToARGB(raw, a, r, g, b);
+		if (a < 128)
+			return false;
+		color = packRGBX(r, g, b);
+		return true;
+	};
+
+	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
+		const Common::Rect &from = _secondScreenPanels[i];
+		Common::Rect to = _bottomPanelRects[i];
+		to.clip(Common::Rect(width, height));
+		if (to.isEmpty() || from.isEmpty())
+			continue;
+
+		const Common::Rect &full = _bottomPanelRects[i];
+		for (int y = to.top; y < to.bottom; y++) {
+			const int sy = from.top + (y - full.top) * from.height() / full.height();
+			if (sy < 0 || sy >= src->h)
+				continue;
+			uint32 *row = dst + y * buffer.stride;
+			for (int x = to.left; x < to.right; x++) {
+				const int sx = from.left + (x - full.left) * from.width() / full.width();
+				if (sx < 0 || sx >= src->w)
+					continue;
+				uint32 color;
+				if (!cursorPixel(sx, sy, color))
+					color = gamePixel(sx, sy);
+				row[x] = color;
+			}
+		}
+	}
+
+	ANativeWindow_unlockAndPost(window);
+	JNI::unlockBottomScreen();
+}
+
+bool AndroidGraphicsManager::bottomScreenToWindow(int x, int y, Common::Point &window) const {
+	if (!isSecondScreenActive() || _overlayInGUI || _bottomPanelRects.size() != _secondScreenPanels.size())
+		return false;
+
+	// Use the panel that was touched, or the nearest one for touches in the gaps
+	uint best = 0;
+	int bestDistance = 1 << 30;
+	for (uint i = 0; i < _bottomPanelRects.size(); i++) {
+		const Common::Rect &r = _bottomPanelRects[i];
+		const int dx = (x < r.left) ? r.left - x : (x >= r.right ? x - r.right + 1 : 0);
+		const int dy = (y < r.top) ? r.top - y : (y >= r.bottom ? y - r.bottom + 1 : 0);
+		if (dx + dy < bestDistance) {
+			best = i;
+			bestDistance = dx + dy;
+		}
+	}
+
+	const Common::Rect &to = _bottomPanelRects[best];
+	const Common::Rect &from = _secondScreenPanels[best];
+	x = CLIP<int>(x, to.left, to.right - 1);
+	y = CLIP<int>(y, to.top, to.bottom - 1);
+	const int gameX = from.left + (x - to.left) * from.width() / to.width();
+	const int gameY = from.top + (y - to.top) * from.height() / to.height();
+
+	window = convertVirtualToWindow(gameX, gameY);
+	return true;
+}
+
+// Scale the game so the part above the second screen panels fills the main
+// screen. The rest of the game screen ends up below the window's bottom edge.
+void AndroidGraphicsManager::adjustGameDrawRect(Common::Rect &drawRect) const {
+	if (!isSecondScreenActive())
+		return;
+
+	const int gameHeight = getHeight();
+	int topHeight = gameHeight;
+	for (uint i = 0; i < _secondScreenPanels.size(); i++)
+		topHeight = MIN<int>(topHeight, _secondScreenPanels[i].top);
+	if (topHeight <= 0 || topHeight >= gameHeight)
+		return;
+
+	// Aspect ratio of what stays on the main screen
+	const frac_t topAspect = getDesiredGameAspectRatio() * gameHeight / topHeight;
+
+	int width = _windowWidth;
+	int height = intToFrac(width) / topAspect;
+	if (height > _windowHeight) {
+		height = _windowHeight;
+		width = fracToInt(height * topAspect);
+	}
+
+	drawRect.left = (_windowWidth - width) / 2;
+	drawRect.right = drawRect.left + width;
+	drawRect.top = (_windowHeight - height) / 2;
+	drawRect.bottom = drawRect.top + height * gameHeight / topHeight;
 }
 
 void AndroidGraphicsManager::displayMessageOnOSD(const Common::U32String &msg) {
@@ -166,6 +451,10 @@ void AndroidGraphicsManager::recalculateDisplayAreas() {
 	Common::Rect oldDrawRect = _activeArea.drawRect;
 
 	OpenGLGraphicsManager::recalculateDisplayAreas();
+
+	// Aspect ratio correction changes how tall the second screen panels are
+	layoutBottomScreen();
+	_bottomNeedsRedraw = true;
 
 	int offsetX = _activeArea.drawRect.left - oldDrawRect.left;
 	int offsetY = _activeArea.drawRect.top - oldDrawRect.top;

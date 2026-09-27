@@ -55,8 +55,16 @@ public:
 	void syncVirtkeyboardState(bool virtkeybd_on);
 	void applyTouchSettings() const;
 
+	void setSecondScreenLayout(const Common::Array<Common::Rect> &panels);
+	/**
+	 * Map a touch on the second screen to window coordinates of the game.
+	 * @return false when the second screen is not in use
+	 */
+	bool bottomScreenToWindow(int x, int y, Common::Point &window) const;
+
 protected:
 	void recalculateDisplayAreas() override;
+	void adjustGameDrawRect(Common::Rect &drawRect) const override;
 	void setSystemMousePosition(const int x, const int y) override {}
 
 	void showOverlay(bool inGUI) override;
@@ -68,9 +76,22 @@ protected:
 	void refreshScreen() override;
 
 private:
+	bool isSecondScreenActive() const;
+	void syncBottomScreen();
+	void layoutBottomScreen();
+	void drawBottomScreen();
+
 	OpenGL::Surface *_touchcontrols;
 	int _old_touch_mode;
 	bool _rendering3d;
+
+	// Panels of the game's interface shown on the second screen, in game
+	// coordinates, and where each is drawn on that screen
+	Common::Array<Common::Rect> _secondScreenPanels;
+	Common::Array<Common::Rect> _bottomPanelRects;
+	int _bottomScreenChangeId;
+	int _bottomWidth, _bottomHeight;
+	bool _bottomNeedsRedraw;
 };
 
 #endif

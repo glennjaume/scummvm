@@ -25,6 +25,7 @@ import android.content.res.AssetManager;
 import android.graphics.PixelFormat;
 import android.media.midi.MidiDevice;
 import android.util.Log;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 
 import androidx.annotation.Keep;
@@ -80,6 +81,9 @@ public abstract class ScummVM implements SurfaceHolder.Callback,
 	// Update the 3D touch controls
 	final public native void setupTouchMode(int oldValue, int newValue);
 	final public native void updateTouch(int action, int ptr, int x, int y);
+	// Hand the second screen's surface to the native side, or null when it goes away
+	final public native void setBottomScreen(Surface surface);
+	final public native void bottomScreenTouch(int action, int x, int y);
 
 	final public native void syncVirtkeyboardState(boolean newState);
 

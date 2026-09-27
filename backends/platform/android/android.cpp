@@ -667,6 +667,12 @@ bool OSystem_Android::getFeatureState(Feature f) {
 	}
 }
 
+void OSystem_Android::setSecondScreenLayout(const Common::Array<Common::Rect> &panels) {
+	AndroidGraphicsManager *gfx = dynamic_cast<AndroidGraphicsManager *>(_graphicsManager);
+	if (gfx)
+		gfx->setSecondScreenLayout(panels);
+}
+
 void OSystem_Android::setPause(bool value) {
 	if (g_engine) {
 		LOGD("pauseEngine: %d", value);

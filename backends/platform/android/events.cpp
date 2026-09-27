@@ -1481,6 +1481,8 @@ bool OSystem_Android::pollEvent(Common::Event &event) {
 			sem_wait(&JNI::pause_sem);
 			LOGD("main thread woke up");
 		}
+
+		processBottomScreenTouches();
 	}
 
 	_event_queue_lock->lock();
@@ -1544,6 +1546,51 @@ bool OSystem_Android::pollEvent(Common::Event &event) {
 	}
 
 	return true;
+}
+
+void OSystem_Android::pushBottomScreenTouch(int action, int x, int y) {
+	BottomScreenTouch touch = { action, x, y };
+
+	_event_queue_lock->lock();
+	_bottom_touch_queue.push(touch);
+	_event_queue_lock->unlock();
+}
+
+// Turn touches on the second screen into mouse events. This must run on the
+// main thread, as mapping them to game coordinates needs the graphics manager.
+void OSystem_Android::processBottomScreenTouches() {
+	AndroidGraphicsManager *gfx = dynamic_cast<AndroidGraphicsManager *>(_graphicsManager);
+
+	while (true) {
+		_event_queue_lock->lock();
+		if (_bottom_touch_queue.empty()) {
+			_event_queue_lock->unlock();
+			return;
+		}
+		BottomScreenTouch touch = _bottom_touch_queue.pop();
+		_event_queue_lock->unlock();
+
+		Common::Event move;
+		move.type = Common::EVENT_MOUSEMOVE;
+		if (!gfx || !gfx->bottomScreenToWindow(touch.x, touch.y, move.mouse))
+			continue;
+
+		Common::Event button = move;
+		switch (touch.action) {
+		case AMOTION_EVENT_ACTION_DOWN:
+			button.type = Common::EVENT_LBUTTONDOWN;
+			pushEvent(move, button);
+			break;
+		case AMOTION_EVENT_ACTION_UP:
+		case AMOTION_EVENT_ACTION_CANCEL:
+			button.type = Common::EVENT_LBUTTONUP;
+			pushEvent(move, button);
+			break;
+		default:
+			pushEvent(move);
+			break;
+		}
+	}
 }
 
 void OSystem_Android::pushEvent(const Common::Event &event) {

@@ -141,6 +141,13 @@ private:
 	PauseToken _pauseToken;
 
 	Common::Queue<Common::Event> _event_queue;
+
+	struct BottomScreenTouch {
+		int action, x, y;
+	};
+	// Touches on the second screen, guarded by _event_queue_lock
+	Common::Queue<BottomScreenTouch> _bottom_touch_queue;
+	void processBottomScreenTouches();
 	EventWithDelay _delayedMouseBtnUpEvent;
 	EventWithDelay _delayedMouseBtnDownEvent;
 	Common::Mutex *_event_queue_lock;
@@ -220,6 +227,9 @@ public:
 	void pushEvent(const Common::Event &event);
 	void pushEvent(const Common::Event &event1, const Common::Event &event2);
 	void pushDelayedTouchMouseBtnEvents();
+	void pushBottomScreenTouch(int action, int x, int y);
+
+	void setSecondScreenLayout(const Common::Array<Common::Rect> &panels) override;
 
 	TouchControls &getTouchControls() { return _touchControls; }
 	void applyTouchSettings(bool _3dMode, bool overlayShown);

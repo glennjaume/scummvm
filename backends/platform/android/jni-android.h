@@ -25,6 +25,7 @@
 #include <jni.h>
 #include <semaphore.h>
 #include <pthread.h>
+#include <android/native_window.h>
 
 #include "common/fs.h"
 #include "common/archive.h"
@@ -54,6 +55,9 @@ public:
 	static int egl_bits_per_pixel;
 
 	static bool virt_keyboard_state;
+
+	// Incremented whenever the second (bottom) screen surface changes
+	static int bottom_screen_changeid;
 
 	static int32 gestures_insets[4];
 	static int32 cutout_insets[4];
@@ -105,6 +109,13 @@ public:
 	static Common::Array<Common::String> getMIDIDevices();
 	static jobject openMIDIDevice(int deviceId, int *port);
 
+	/**
+	 * Lock and return the second screen window, or nullptr if there is none.
+	 * Always call unlockBottomScreen() afterwards, even on nullptr.
+	 */
+	static ANativeWindow *lockBottomScreen();
+	static void unlockBottomScreen();
+
 	static inline bool haveSurface();
 	static inline bool swapBuffers();
 	static bool initSurface();
@@ -143,6 +154,9 @@ private:
 	static OSystem_Android *_system;
 
 	static bool _ready_for_events;
+
+	static ANativeWindow *_bottom_window;
+	static pthread_mutex_t _bottom_window_lock;
 
 	static jmethodID _MID_getDPI;
 	static jmethodID _MID_displayMessageOnOSD;
@@ -195,6 +209,8 @@ private:
 	static void pushEvent(JNIEnv *env, jobject self, int type, int arg1,
 							int arg2, int arg3, int arg4, int arg5, int arg6);
 	static void updateTouch(JNIEnv *env, jobject self, int action, int ptr, int x, int y);
+	static void setBottomScreen(JNIEnv *env, jobject self, jobject surface);
+	static void bottomScreenTouch(JNIEnv *env, jobject self, jint action, jint x, jint y);
 	static void setupTouchMode(JNIEnv *env, jobject self, jint oldValue, jint newValue);
 	static void syncVirtkeyboardState(JNIEnv *env, jobject self, jboolean newState);
 	static void setPause(JNIEnv *env, jobject self, jboolean value);

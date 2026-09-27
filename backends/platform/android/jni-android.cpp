@@ -38,6 +38,7 @@
 #define FORBIDDEN_SYMBOL_EXCEPTION_printf
 
 #include <android/bitmap.h>
+#include <android/native_window_jni.h>
 
 #include "backends/platform/android/android.h"
 #include "backends/platform/android/jni-android.h"
@@ -80,6 +81,10 @@ int JNI::egl_surface_width = 0;
 int JNI::egl_surface_height = 0;
 int JNI::egl_bits_per_pixel = 0;
 bool JNI::_ready_for_events = 0;
+
+int JNI::bottom_screen_changeid = 0;
+ANativeWindow *JNI::_bottom_window = nullptr;
+pthread_mutex_t JNI::_bottom_window_lock = PTHREAD_MUTEX_INITIALIZER;
 bool JNI::virt_keyboard_state = false;
 int32 JNI::gestures_insets[4] = { 0, 0, 0, 0 };
 int32 JNI::cutout_insets[4] = { 0, 0, 0, 0 };
@@ -134,6 +139,10 @@ const JNINativeMethod JNI::_natives[] = {
 		(void *)JNI::pushEvent },
 	{ "updateTouch", "(IIII)V",
 		(void *)JNI::updateTouch },
+	{ "setBottomScreen", "(Landroid/view/Surface;)V",
+		(void *)JNI::setBottomScreen },
+	{ "bottomScreenTouch", "(III)V",
+		(void *)JNI::bottomScreenTouch },
 	{ "setupTouchMode", "(II)V",
 		(void *)JNI::setupTouchMode },
 	{ "syncVirtkeyboardState", "(Z)V",
@@ -971,6 +980,42 @@ void JNI::pushEvent(JNIEnv *env, jobject self, int type, int arg1, int arg2,
 	assert(_system);
 
 	_system->pushEvent(type, arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+ANativeWindow *JNI::lockBottomScreen() {
+	pthread_mutex_lock(&_bottom_window_lock);
+	return _bottom_window;
+}
+
+void JNI::unlockBottomScreen() {
+	pthread_mutex_unlock(&_bottom_window_lock);
+}
+
+void JNI::setBottomScreen(JNIEnv *env, jobject self, jobject surface) {
+	// Called from the UI thread. Taking the lock waits for any frame the
+	// main thread is drawing, so the old window is never released under it.
+	pthread_mutex_lock(&_bottom_window_lock);
+	if (_bottom_window) {
+		ANativeWindow_release(_bottom_window);
+		_bottom_window = nullptr;
+	}
+	if (surface) {
+		_bottom_window = ANativeWindow_fromSurface(env, surface);
+	}
+	bottom_screen_changeid++;
+	pthread_mutex_unlock(&_bottom_window_lock);
+}
+
+void JNI::bottomScreenTouch(JNIEnv *env, jobject self, jint action, jint x, jint y) {
+	// drop events until we're ready and after we quit
+	if (!_ready_for_events) {
+		LOGW("dropping event");
+		return;
+	}
+
+	assert(_system);
+
+	_system->pushBottomScreenTouch(action, x, y);
 }
 
 void JNI::updateTouch(JNIEnv *env, jobject self, int action, int ptr, int x, int y) {
