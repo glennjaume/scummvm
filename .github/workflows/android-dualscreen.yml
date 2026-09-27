@@ -72,16 +72,14 @@ jobs:
             --with-ogg-prefix="$ANDROID_LIBS" --with-vorbis-prefix="$ANDROID_LIBS" \
             --disable-debug
 
-      - name: Use a fixed debug key
-        # Gradle signs debug builds with ~/.android/debug.keystore and makes a
-        # new one when it is missing. Keeping the key fixed lets each build
-        # install over the last one, keeping the games and saves.
-        run: |
-          mkdir -p ~/.android
-          cp .github/android-debug.keystore ~/.android/debug.keystore
-
       - name: Build the APK
-        run: make -j4
+        # Sign with a fixed debug key, so each build installs over the last
+        # one and keeps the games and saves
+        env:
+          SCUMMVM_DEBUG_KEYSTORE: ${{ github.workspace }}/.github/android-debug.keystore
+        run: |
+          make -j4
+          keytool -printcert -jarfile *.apk | grep SHA256
 
       - uses: actions/upload-artifact@v4
         with:

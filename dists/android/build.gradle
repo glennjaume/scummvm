@@ -91,6 +91,19 @@ android {
         // ScummVM 1.8.1:    15
     }
 
+    signingConfigs {
+        debug {
+            // Lets builds from different machines install over each other
+            def debugKeystore = System.getenv('SCUMMVM_DEBUG_KEYSTORE')
+            if (debugKeystore) {
+                storeFile = file(debugKeystore)
+                storePassword = 'android'
+                keyAlias = 'androiddebugkey'
+                keyPassword = 'android'
+            }
+        }
+    }
+
     buildTypes {
         debug{
             applicationIdSuffix ".debug"
