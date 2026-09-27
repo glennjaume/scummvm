@@ -517,7 +517,11 @@ enum ScummBackendAction {
 	kScummBackendActionRebel2AxisUp,
 	kScummBackendActionRebel2AxisDown,
 	kScummBackendActionRebel2AxisLeft,
-	kScummBackendActionRebel2AxisRight
+	kScummBackendActionRebel2AxisRight,
+	kScummBackendActionWalkUp,
+	kScummBackendActionWalkDown,
+	kScummBackendActionWalkLeft,
+	kScummBackendActionWalkRight
 };
 
 extern const char *const insaneKeymapId;
@@ -1428,6 +1432,11 @@ protected:
 	void updateSecondScreenLayout();
 	bool getSecondScreenLines(const Common::Rect &area, Common::Array<Common::Rect> &panels) const;
 	void focusNextVerb(int dirX, int dirY);
+	void updateStickWalk();
+	int16 _walkStickX = 0, _walkStickY = 0;
+	bool _stickWalking = false;
+	uint32 _lastStickWalk = 0;
+	Common::Point _stickWalkStep;
 	void initVirtScreen(VirtScreenNumber slot, int top, int width, int height, bool twobufs, bool scrollable);
 	void initBGBuffers(int height);
 	void initCycl(const byte *ptr);	// Color cycle

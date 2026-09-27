@@ -1712,4 +1712,55 @@ void ScummEngine::setVerbObject(uint room, uint object, uint verb) {
 	}
 }
 
+void ScummEngine::updateStickWalk() {
+	// Walk the player's character towards where the stick points, by giving
+	// it a new walk target a little way ahead every few frames. The game's
+	// own path finding keeps it inside the walk boxes.
+	const int deadZone = 8000;
+	const bool held = ABS(_walkStickX) > deadZone || ABS(_walkStickY) > deadZone;
+
+	Actor *a = nullptr;
+	if (_game.version >= 3 && VAR_EGO != 0xFF) {
+		const int ego = VAR(VAR_EGO);
+		if (ego > 0 && ego < _numActors)
+			a = _actors[ego];
+	}
+	if (!a || !a->isInCurrentRoom() || _userPut <= 0 || _cursor.state <= 0) {
+		_stickWalking = false;
+		return;
+	}
+
+	// Leave the character where it is during conversations
+	const VirtScreen &verbScreen = _virtscr[kVerbVirtScreen];
+	Common::Array<Common::Rect> lines;
+	if (held && verbScreen.h > 0 &&
+	    getSecondScreenLines(Common::Rect(0, verbScreen.topline, _screenWidth, _screenHeight), lines))
+		return;
+
+	const Common::Point pos = a->getPos();
+	if (!held) {
+		// Stop just ahead, rather than at the last target
+		if (_stickWalking) {
+			_stickWalking = false;
+			a->startWalkActor(pos.x + _stickWalkStep.x / 8, pos.y + _stickWalkStep.y / 8, -1);
+		}
+		return;
+	}
+
+	const uint32 now = _system->getMillis();
+	const float length = sqrtf((float)_walkStickX * _walkStickX + (float)_walkStickY * _walkStickY);
+	const int lookAhead = 32;
+	const Common::Point step((int)(lookAhead * _walkStickX / length), (int)(lookAhead * _walkStickY / length));
+	if (_stickWalking && now - _lastStickWalk < 150 &&
+	    ABS(step.x - _stickWalkStep.x) + ABS(step.y - _stickWalkStep.y) < lookAhead / 2)
+		return;
+
+	_stickWalking = true;
+	_lastStickWalk = now;
+	_stickWalkStep = step;
+	const int x = CLIP<int>(pos.x + step.x, 0, _roomWidth - 1);
+	const int y = CLIP<int>(pos.y + step.y, 0, _roomHeight - 1);
+	a->startWalkActor(x, y, -1);
+}
+
 } // End of namespace Scumm

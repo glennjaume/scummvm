@@ -116,6 +116,31 @@ void ScummEngine::parseEvent(Common::Event event) {
 		return;
 
 	switch (event.type) {
+	case Common::EVENT_CUSTOM_BACKEND_ACTION_AXIS:
+		// A released axis also resets the opposite direction, so ignore
+		// that while the stick is held the other way
+		switch (event.customType) {
+		case kScummBackendActionWalkUp:
+			if (event.joystick.position != 0 || _walkStickY <= 0)
+				_walkStickY = -event.joystick.position;
+			break;
+		case kScummBackendActionWalkDown:
+			if (event.joystick.position != 0 || _walkStickY >= 0)
+				_walkStickY = event.joystick.position;
+			break;
+		case kScummBackendActionWalkLeft:
+			if (event.joystick.position != 0 || _walkStickX <= 0)
+				_walkStickX = -event.joystick.position;
+			break;
+		case kScummBackendActionWalkRight:
+			if (event.joystick.position != 0 || _walkStickX >= 0)
+				_walkStickX = event.joystick.position;
+			break;
+		default:
+			break;
+		}
+		break;
+
 	case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
 		if (event.customType >= kScummActionCount) {
 			debugC(DEBUG_GENERAL, "customType >= kScummActionCount (%d)", event.customType);

@@ -755,12 +755,16 @@ Common::KeymapperDefaultBindings *OSystem_Android::getKeymapperDefaultBindings()
 	// TODO If/when full key-based (ie. non-mouse) navigation of the ScummVM GUI is implemented,
 	// we can revert back to the core behavior of DPAD being mapped to "up", "down", "left", "right" directions.
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSEUP", "JOY_LEFT_STICK_Y-");
+	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSEUP", "JOY_RIGHT_STICK_Y-");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSEUP", "JOY_UP");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSEDOWN", "JOY_LEFT_STICK_Y+");
+	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSEDOWN", "JOY_RIGHT_STICK_Y+");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSEDOWN", "JOY_DOWN");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSELEFT", "JOY_LEFT_STICK_X-");
+	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSELEFT", "JOY_RIGHT_STICK_X-");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSELEFT", "JOY_LEFT");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSERIGHT", "JOY_LEFT_STICK_X+");
+	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSERIGHT", "JOY_RIGHT_STICK_X+");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSERIGHT", "JOY_RIGHT");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSESLOW", "JOY_RIGHT_SHOULDER");
 	keymapperDefaultBindings->addDefaultBinding(Common::kGlobalKeymapName, "VMOUSESLOW", "AUDIOPLAYPAUSE");

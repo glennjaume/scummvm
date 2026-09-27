@@ -1223,7 +1223,7 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 	// verbs, inventory items and dialog choices
 	if (gameId == "monkey" || gameId == "monkey2" || gameId == "atlantis" || gameId == "indy3" ||
 	    gameId == "zak" || gameId == "maniac") {
-		Keymap *verbKeymap = new Keymap(Keymap::kKeymapTypeGame, "scumm-verb-focus", _("Interface navigation"));
+		Keymap *verbKeymap = new Keymap(Keymap::kKeymapTypeGame, "scumm-verb-focus", _("Controller navigation"));
 
 		act = new Action("VERBUP", _("Select the verb or choice above"));
 		act->setCustomEngineActionEvent(kScummActionFocusUp);
@@ -1247,6 +1247,28 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 		act->setCustomEngineActionEvent(kScummActionFocusRight);
 		act->addDefaultInputMapping("JOY_RIGHT");
 		act->addDefaultInputMapping("JOY_HAT_X+");
+		verbKeymap->addAction(act);
+
+		// The left stick walks the player's character; the right stick
+		// moves the pointer instead
+		act = new Action("WALKUP", _("Walk up"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionWalkUp);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_Y-");
+		verbKeymap->addAction(act);
+
+		act = new Action("WALKDOWN", _("Walk down"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionWalkDown);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_Y+");
+		verbKeymap->addAction(act);
+
+		act = new Action("WALKLEFT", _("Walk left"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionWalkLeft);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_X-");
+		verbKeymap->addAction(act);
+
+		act = new Action("WALKRIGHT", _("Walk right"));
+		act->setCustomBackendActionAxisEvent(kScummBackendActionWalkRight);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_X+");
 		verbKeymap->addAction(act);
 
 		keymaps.push_back(verbKeymap);

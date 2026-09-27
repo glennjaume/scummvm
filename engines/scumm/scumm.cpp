@@ -3342,6 +3342,7 @@ load_game:
 	}
 
 	updateSecondScreenLayout();
+	updateStickWalk();
 
 	scummLoop_handleSound();
 
