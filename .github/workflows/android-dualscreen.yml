@@ -46,7 +46,9 @@ jobs:
           cmake -S /tmp/ogg -B /tmp/ogg/build $CMAKE_ARGS -DINSTALL_DOCS=OFF
           cmake --build /tmp/ogg/build --target install -j4
           git clone --depth 1 --branch v1.3.7 https://github.com/xiph/vorbis.git /tmp/vorbis
-          cmake -S /tmp/vorbis -B /tmp/vorbis/build $CMAKE_ARGS
+          # The NDK toolchain only searches its sysroot, so point vorbis at ogg directly
+          cmake -S /tmp/vorbis -B /tmp/vorbis/build $CMAKE_ARGS \
+            -DOGG_INCLUDE_DIR="$PREFIX/include" -DOGG_LIBRARY="$PREFIX/lib/libogg.a"
           cmake --build /tmp/vorbis/build --target install -j4
 
       - name: Configure
