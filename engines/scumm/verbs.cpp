@@ -611,6 +611,7 @@ void ScummEngine::updateSecondScreenLayout() {
 	// Offer the sentence line, verbs and inventory to backends with a second
 	// screen. Only do this when the game screen maps 1:1 onto the backend
 	// screen, which rules out upscaled modes such as CJK, Hercules or FM-Towns.
+	_secondScreenSentenceVerb = -1;
 	const VirtScreen &verbScreen = _virtscr[kVerbVirtScreen];
 	if (verbScreen.h <= 0 ||
 	    (int)_system->getWidth() != _screenWidth ||
@@ -626,6 +627,7 @@ void ScummEngine::updateSecondScreenLayout() {
 
 	// Find the visible verbs
 	Common::Array<Common::Rect> rects;
+	Common::Array<int> slots;
 	for (int i = 1; i < _numVerbs; i++) {
 		const VerbSlot &vs = _verbs[i];
 		// Dimmed verbs (mode 2) still take up space
@@ -635,8 +637,10 @@ void ScummEngine::updateSecondScreenLayout() {
 		if (vs.center)
 			r.left = 2 * r.left - r.right;
 		r.clip(area);
-		if (!r.isEmpty())
+		if (!r.isEmpty()) {
 			rects.push_back(r);
+			slots.push_back(i);
+		}
 	}
 
 	// Some games draw the sentence line as a verb of its own, alone on the
@@ -658,6 +662,11 @@ void ScummEngine::updateSecondScreenLayout() {
 			if (rects[i].top >= topRowBottom - 1)
 				sentenceVerb = true;
 		}
+	}
+	int sentenceSlot = -1;
+	for (uint i = 0; sentenceVerb && i < rects.size(); i++) {
+		if (rects[i].top < minTop + 4)
+			sentenceSlot = slots[i];
 	}
 
 	// Which columns the other verbs use, and where they start
@@ -684,6 +693,8 @@ void ScummEngine::updateSecondScreenLayout() {
 			return;
 		panels.push_back(area);
 	} else if (!getSecondScreenLines(area, panels)) {
+		_secondScreenSentenceVerb = sentenceSlot;
+
 		// The sentence line sits above the verbs and spans the full width
 		if (verbsTop - area.top >= 4)
 			panels.push_back(Common::Rect(0, area.top, _screenWidth, verbsTop));
@@ -736,11 +747,13 @@ void ScummEngine::focusNextVerb(int dirX, int dirY) {
 		int slot;
 		Common::Rect rect;
 		Common::Point center;
+		Common::Point click;
 	};
 	Common::Array<Target> targets;
 	for (int i = 1; i < _numVerbs; i++) {
 		const VerbSlot &vs = _verbs[i];
-		if (vs.curmode != 1 || !vs.verbid || vs.saveid)
+		// Clicking the sentence line would run the sentence
+		if (vs.curmode != 1 || !vs.verbid || vs.saveid || i == _secondScreenSentenceVerb)
 			continue;
 		Common::Rect r = vs.curRect;
 		if (vs.center)
@@ -748,7 +761,20 @@ void ScummEngine::focusNextVerb(int dirX, int dirY) {
 		r.clip(Common::Rect(_screenWidth, _screenHeight));
 		if (r.isEmpty())
 			continue;
-		Target t = { i, r, Common::Point((r.left + r.right) / 2, (r.top + r.bottom) / 2) };
+		const Common::Point click((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+
+		// Move in the order the second screen shows the panels: stacked top
+		// to bottom, each from its left edge
+		int stackTop = 0;
+		for (uint j = 0; j < _secondScreenPanels.size(); j++) {
+			const Common::Rect &panel = _secondScreenPanels[j];
+			if (panel.contains(r.left, r.top)) {
+				r.translate(-panel.left, stackTop - panel.top);
+				break;
+			}
+			stackTop += panel.height();
+		}
+		Target t = { i, r, Common::Point((r.left + r.right) / 2, (r.top + r.bottom) / 2), click };
 		targets.push_back(t);
 	}
 	if (targets.empty())
@@ -800,8 +826,8 @@ void ScummEngine::focusNextVerb(int dirX, int dirY) {
 	if (!best)
 		return;
 
-	_mouse.x = best->center.x;
-	_mouse.y = best->center.y;
+	_mouse.x = best->click.x;
+	_mouse.y = best->click.y;
 	_system->warpMouse(_mouse.x * _textSurfaceMultiplier, _mouse.y * _textSurfaceMultiplier);
 
 	// Not every backend reports a warp back as mouse movement, and buttons

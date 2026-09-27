@@ -551,6 +551,7 @@ public:
 
 	VerbSlot *_verbs = nullptr;
 	Common::Array<Common::Rect> _secondScreenPanels;
+	int _secondScreenSentenceVerb = -1;
 	ObjectData *_objs = nullptr;
 
 	// Core variables
