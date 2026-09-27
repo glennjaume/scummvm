@@ -512,10 +512,15 @@ void OSystem_Android::applyTouchSettings(bool _3dMode, bool overlayShown) {
 		defaultMode = TOUCH_MODE_GAMEPAD;
 	} else {
 		setting = "touch_mode_2d_games";
+		defaultMode = TOUCH_MODE_TOUCHPAD;
+
 		// With the interface on a second screen, a touchpad would leave the
-		// cursor there after tapping it, so taps on the game go straight
-		// to where they land instead.
-		defaultMode = JNI::hasBottomScreen() ? TOUCH_MODE_MOUSE : TOUCH_MODE_TOUCHPAD;
+		// cursor there after tapping it, so unless the player chose a mode,
+		// taps on the game go straight to where they land instead.
+		if (JNI::hasBottomScreen() && !ConfMan.hasKey(setting)) {
+			JNI::setTouchMode(TOUCH_MODE_MOUSE);
+			return;
+		}
 	}
 
 	Common::String preferredTouchMode = ConfMan.get(setting);
