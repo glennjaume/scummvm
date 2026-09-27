@@ -1425,6 +1425,7 @@ public:
 protected:
 	void initScreens(int b, int h);
 	void updateSecondScreenLayout();
+	bool getSecondScreenLines(const Common::Rect &area, Common::Array<Common::Rect> &panels) const;
 	void focusNextVerb(int dirX, int dirY);
 	void initVirtScreen(VirtScreenNumber slot, int top, int width, int height, bool twobufs, bool scrollable);
 	void initBGBuffers(int height);

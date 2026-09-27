@@ -515,6 +515,98 @@ void ScummEngine_v2::redrawV2Inventory() {
 	}
 }
 
+bool ScummEngine::getSecondScreenLines(const Common::Rect &area, Common::Array<Common::Rect> &panels) const {
+	// Dialog choices are verbs stacked one per row, unlike the verb bar and
+	// inventory, which put several verbs on each row. Give each choice its
+	// own panel, and wrap long ones at a gap between words, so the backend
+	// can show them larger than the full-width strip would allow.
+	const VirtScreen &verbScreen = _virtscr[kVerbVirtScreen];
+	Common::Array<Common::Rect> lines;
+	for (int i = 1; i < _numVerbs; i++) {
+		const VerbSlot &vs = _verbs[i];
+		if (!vs.curmode || !vs.verbid || vs.saveid)
+			continue;
+		Common::Rect r = vs.curRect;
+		if (vs.center)
+			r.left = 2 * r.left - r.right;
+		r.clip(area);
+		if (r.isEmpty())
+			continue;
+		for (uint j = 0; j < lines.size(); j++) {
+			if (r.top < lines[j].bottom && lines[j].top < r.bottom)
+				return false;
+		}
+		uint pos = 0;
+		while (pos < lines.size() && lines[pos].top < r.top)
+			pos++;
+		lines.insert_at(pos, r);
+	}
+	const int maxWidth = _screenWidth * 11 / 20;
+	if (lines.empty() || (lines.size() == 1 && lines[0].width() <= _screenWidth / 2))
+		return false;
+
+	for (uint i = 0; i < lines.size(); i++) {
+		const Common::Rect &r = lines[i];
+		if (r.width() <= maxWidth) {
+			panels.push_back(r);
+			continue;
+		}
+
+		// Background is the most common colour in the line
+		uint counts[256] = {};
+		for (int y = r.top; y < r.bottom; y++) {
+			const byte *row = verbScreen.getPixels(0, y - verbScreen.topline);
+			for (int x = r.left; x < r.right; x++)
+				counts[row[x]]++;
+		}
+		byte background = 0;
+		for (int c = 1; c < 256; c++) {
+			if (counts[c] > counts[background])
+				background = c;
+		}
+
+		// Blank columns; letters sit a column apart, words further
+		Common::Array<bool> blank(r.width(), true);
+		for (int y = r.top; y < r.bottom; y++) {
+			const byte *row = verbScreen.getPixels(0, y - verbScreen.topline);
+			for (int x = r.left; x < r.right; x++) {
+				if (row[x] != background)
+					blank[x - r.left] = false;
+			}
+		}
+
+		// Break at the word gap closest to the middle. Spaces leave wider
+		// gaps than the column or two between letters, so try those first.
+		int breakStart = -1, breakEnd = -1;
+		const int middle = r.width() / 2;
+		for (int minGap = 3; minGap >= 2 && breakStart < 0; minGap--) {
+			for (int x = 0; x < r.width();) {
+				if (!blank[x]) {
+					x++;
+					continue;
+				}
+				int end = x;
+				while (end < r.width() && blank[end])
+					end++;
+				if (end - x >= minGap && x > 0 && end < r.width() &&
+				    (breakStart < 0 || ABS((x + end) / 2 - middle) < ABS((breakStart + breakEnd) / 2 - middle))) {
+					breakStart = x;
+					breakEnd = end;
+				}
+				x = end;
+			}
+		}
+
+		if (breakStart < 0) {
+			panels.push_back(r);
+		} else {
+			panels.push_back(Common::Rect(r.left, r.top, r.left + breakStart, r.bottom));
+			panels.push_back(Common::Rect(r.left + breakEnd, r.top, r.right, r.bottom));
+		}
+	}
+	return true;
+}
+
 void ScummEngine::updateSecondScreenLayout() {
 	// Offer the sentence line, verbs and inventory to backends with a second
 	// screen. Only do this when the game screen maps 1:1 onto the backend
@@ -562,7 +654,7 @@ void ScummEngine::updateSecondScreenLayout() {
 		if (!_secondScreenPanels.empty() && _secondScreenPanels[0].top == area.top)
 			return;
 		panels.push_back(area);
-	} else {
+	} else if (!getSecondScreenLines(area, panels)) {
 		// The sentence line sits above the verbs and spans the full width
 		if (verbsTop - area.top >= 4)
 			panels.push_back(Common::Rect(0, area.top, _screenWidth, verbsTop));
@@ -572,8 +664,7 @@ void ScummEngine::updateSecondScreenLayout() {
 		// Split verbs and inventory where no verb straddles the line, as close
 		// to the middle as possible. Verbs and inventory can sit right next
 		// to each other (e.g. the MI2 inventory arrows), so a split may fall
-		// between two touching verbs. Dialog choices span the full width, so
-		// they stay whole.
+		// between two touching verbs.
 		int split = -1;
 		for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
 			if (!straddled[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
