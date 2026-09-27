@@ -380,6 +380,7 @@ protected:
 		populateDisplayAreaDrawRect(getDesiredGameAspectRatio(),
 				getWidth() * getGameRenderScale(), getHeight() * getGameRenderScale(),
 				safeArea, _gameDrawRect);
+		adjustGameDrawRect(_gameDrawRect);
 
 		if (getOverlayHeight()) {
 			const int16 overlayWidth = getOverlayWidth(),
@@ -409,6 +410,12 @@ protected:
 	 * @param y Y coordinate in window coordinates.
 	 */
 	virtual void setSystemMousePosition(const int x, const int y) = 0;
+
+	/**
+	 * Lets a backend change where the game screen is drawn after the default
+	 * placement has been computed, e.g. to push part of it off the window.
+	 */
+	virtual void adjustGameDrawRect(Common::Rect &drawRect) const {}
 
 	/**
 	 * Called whenever the active area has changed.

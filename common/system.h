@@ -1368,6 +1368,22 @@ public:
 	virtual void clearFocusRectangle() {}
 
 	/**
+	 * Tell the backend which parts of the game screen hold the game's own
+	 * interface, such as a sentence line, a verb bar and an inventory.
+	 *
+	 * Backends running on a device with a second physical screen may show
+	 * these panels there, stacked top to bottom in the given order, and crop
+	 * everything from the topmost panel down off the main screen. Backends
+	 * without a second screen ignore this.
+	 *
+	 * @param panels Panels in game screen coordinates. Together they must
+	 *               cover the game screen from the top of the first panel
+	 *               to its bottom edge. An empty array means the game
+	 *               currently has no interface area.
+	 */
+	virtual void setSecondScreenLayout(const Common::Array<Common::Rect> &panels) {}
+
+	/**
 	 * Instruct the backend to capture a screenshot of the current screen.
 	 *
 	 * The backend can persist it the way it considers appropriate.
