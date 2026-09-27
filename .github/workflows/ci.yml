@@ -1,5 +1,10 @@
 name: CI
-on: [push, pull_request]
+# The dual-screen branch only needs its Android build (android-dualscreen.yml)
+on:
+  push:
+    branches-ignore: [dual-screen]
+  pull_request:
+    branches-ignore: [dual-screen]
 #  schedule:
 #    - cron: '0 0-23/4 * * *'
 permissions:
