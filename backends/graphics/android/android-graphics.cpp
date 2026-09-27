@@ -253,12 +253,22 @@ void AndroidGraphicsManager::layoutBottomScreen() {
 		totalHeight += _secondScreenPanels[i].height() * s * pixelAspect;
 	}
 
+	// Panels on the same rows are one line wrapped in two, so keep them close
 	const int gap = _bottomHeight / 40;
-	const int gaps = gap * (_secondScreenPanels.size() - 1);
-	const float available = margin * _bottomHeight - gaps;
+	Common::Array<int> gaps;
+	int totalGaps = 0;
+	for (uint i = 1; i < _secondScreenPanels.size(); i++) {
+		const Common::Rect &prev = _secondScreenPanels[i - 1];
+		const Common::Rect &panel = _secondScreenPanels[i];
+		const bool continued = (panel.top == prev.top && panel.bottom == prev.bottom);
+		gaps.push_back(continued ? gap / 4 : gap);
+		totalGaps += gaps.back();
+	}
+	const float available = margin * _bottomHeight - totalGaps;
 	const float shrink = (totalHeight > available) ? available / totalHeight : 1.0f;
 
-	int usedHeight = gaps;
+	int usedHeight = totalGaps;
+	int splitWidth = 0;
 	Common::Array<Common::Point> sizes;
 	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
 		const Common::Rect &panel = _secondScreenPanels[i];
@@ -266,13 +276,18 @@ void AndroidGraphicsManager::layoutBottomScreen() {
 		const int h = MAX(1, (int)(panel.height() * scales[i] * shrink * pixelAspect));
 		sizes.push_back(Common::Point(w, h));
 		usedHeight += h;
+		if (panel.width() < gameWidth)
+			splitWidth = MAX(splitWidth, w);
 	}
 
+	// Narrower panels line up on their left edges, in a centered column
+	const int splitLeft = (_bottomWidth - splitWidth) / 2;
 	int y = (_bottomHeight - usedHeight) / 2;
 	for (uint i = 0; i < sizes.size(); i++) {
-		const int x = (_bottomWidth - sizes[i].x) / 2;
+		const int x = (_secondScreenPanels[i].width() < gameWidth) ? splitLeft : (_bottomWidth - sizes[i].x) / 2;
 		_bottomPanelRects.push_back(Common::Rect(x, y, x + sizes[i].x, y + sizes[i].y));
-		y += sizes[i].y + gap;
+		if (i < gaps.size())
+			y += sizes[i].y + gaps[i];
 	}
 }
 
@@ -328,11 +343,13 @@ void AndroidGraphicsManager::drawBottomScreen() {
 
 	// The cursor, in game coordinates, when it is over the second screen
 	const Graphics::Surface *cursor = nullptr;
+	Common::Point cursorHotspot;
 	Common::Rect cursorRect;
 	uint32 cursorPalette[256];
 	if (_cursorVisible && _cursor && !_overlayVisible) {
 		cursor = _cursor->getSurface();
 		const Common::Point pos = convertWindowToVirtual(_cursorX, _cursorY);
+		cursorHotspot = pos;
 		cursorRect = Common::Rect(pos.x - _cursorHotspotX, pos.y - _cursorHotspotY,
 		                          pos.x - _cursorHotspotX + cursor->w, pos.y - _cursorHotspotY + cursor->h);
 		if (cursor->format.isCLUT8()) {
@@ -342,11 +359,9 @@ void AndroidGraphicsManager::drawBottomScreen() {
 		}
 	}
 
-	// Returns whether the cursor covers this game pixel, and its color
+	// Returns whether the cursor covers this cursor pixel, and its color
 	auto cursorPixel = [&](int x, int y, uint32 &color) -> bool {
-		if (!cursor || !cursorRect.contains(x, y))
-			return false;
-		const byte *p = (const byte *)cursor->getBasePtr(x - cursorRect.left, y - cursorRect.top);
+		const byte *p = (const byte *)cursor->getBasePtr(x, y);
 		if (cursor->format.isCLUT8()) {
 			if (_cursorUseKey && *p == _cursorKeyColor)
 				return false;
@@ -381,10 +396,47 @@ void AndroidGraphicsManager::drawBottomScreen() {
 				const int sx = from.left + (x - full.left) * from.width() / full.width();
 				if (sx < 0 || sx >= src->w)
 					continue;
-				uint32 color;
-				if (!cursorPixel(sx, sy, color))
-					color = gamePixel(sx, sy);
-				row[x] = color;
+				row[x] = gamePixel(sx, sy);
+			}
+		}
+	}
+
+	// Draw the cursor over everything, scaled like the panel nearest to its
+	// hotspot, so it is not cut off by the panel edges
+	const int topRows = secondScreenTopRows();
+	if (cursor && cursorHotspot.y >= topRows) {
+		int nearest = -1;
+		int nearestDistance = 0;
+		for (uint i = 0; i < _secondScreenPanels.size(); i++) {
+			const Common::Rect &panel = _secondScreenPanels[i];
+			if (panel.isEmpty())
+				continue;
+			const int dx = MAX(0, MAX(panel.left - cursorHotspot.x, cursorHotspot.x - (panel.right - 1)));
+			const int dy = MAX(0, MAX(panel.top - cursorHotspot.y, cursorHotspot.y - (panel.bottom - 1)));
+			if (nearest < 0 || dx + dy < nearestDistance) {
+				nearest = i;
+				nearestDistance = dx + dy;
+			}
+		}
+
+		if (nearest >= 0) {
+			const Common::Rect &from = _secondScreenPanels[nearest];
+			const Common::Rect &full = _bottomPanelRects[nearest];
+			const float scaleX = (float)full.width() / from.width();
+			const float scaleY = (float)full.height() / from.height();
+			const int left = full.left + (int)((cursorRect.left - from.left) * scaleX);
+			const int top = full.top + (int)((cursorRect.top - from.top) * scaleY);
+			Common::Rect to(left, top, left + (int)(cursor->w * scaleX), top + (int)(cursor->h * scaleY));
+			const Common::Rect scaled = to;
+			to.clip(Common::Rect(width, height));
+			for (int y = to.top; y < to.bottom; y++) {
+				const int cy = (y - scaled.top) * cursor->h / scaled.height();
+				uint32 *row = dst + y * buffer.stride;
+				for (int x = to.left; x < to.right; x++) {
+					uint32 color;
+					if (cursorPixel((x - scaled.left) * cursor->w / scaled.width(), cy, color))
+						row[x] = color;
+				}
 			}
 		}
 	}
