@@ -811,11 +811,18 @@ void ScummEngine::focusNextVerb(int dirX, int dirY) {
 			const int along = dx * dirX + dy * dirY;
 			if (along <= 0)
 				continue;
+			// Negative when the two overlap sideways, zero when they touch
 			int across;
 			if (dirY)
-				across = MAX(0, MAX(r.left - from->rect.right, from->rect.left - r.right));
+				across = MAX(r.left - from->rect.right, from->rect.left - r.right);
 			else
-				across = MAX(0, MAX(r.top - from->rect.bottom, from->rect.top - r.bottom));
+				across = MAX(r.top - from->rect.bottom, from->rect.top - r.bottom);
+
+			// Left and right stay on the current row, which also keeps them
+			// within the verbs or the inventory
+			if (dirX && across >= 0)
+				continue;
+			across = (across < 0) ? 0 : across + 1;
 			const int score = along + 3 * across;
 			if (!best || score < bestScore) {
 				best = &targets[i];
