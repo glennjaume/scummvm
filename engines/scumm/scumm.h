@@ -501,6 +501,10 @@ enum ScummAction {
 	kScummActionInsaneCheat,
 	kScummActionInsaneBack,
 	kScummActionInsaneSkip,
+	kScummActionFocusUp,
+	kScummActionFocusDown,
+	kScummActionFocusLeft,
+	kScummActionFocusRight,
 
 	kScummActionCount
 };
@@ -1421,6 +1425,7 @@ public:
 protected:
 	void initScreens(int b, int h);
 	void updateSecondScreenLayout();
+	void focusNextVerb(int dirX, int dirY);
 	void initVirtScreen(VirtScreenNumber slot, int top, int width, int height, bool twobufs, bool scrollable);
 	void initBGBuffers(int height);
 	void initCycl(const byte *ptr);	// Color cycle

@@ -122,6 +122,23 @@ void ScummEngine::parseEvent(Common::Event event) {
 		} else {
 			_actionMap[event.customType] = true;
 		}
+
+		switch (event.customType) {
+		case kScummActionFocusUp:
+			focusNextVerb(0, -1);
+			break;
+		case kScummActionFocusDown:
+			focusNextVerb(0, 1);
+			break;
+		case kScummActionFocusLeft:
+			focusNextVerb(-1, 0);
+			break;
+		case kScummActionFocusRight:
+			focusNextVerb(1, 0);
+			break;
+		default:
+			break;
+		}
 		break;
 
 	case Common::EVENT_CUSTOM_ENGINE_ACTION_END:

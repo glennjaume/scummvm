@@ -604,6 +604,76 @@ void ScummEngine::updateSecondScreenLayout() {
 	_system->setSecondScreenLayout(_secondScreenPanels);
 }
 
+void ScummEngine::focusNextVerb(int dirX, int dirY) {
+	// Only while the player can use the interface
+	if (!_userPut || _cursor.state <= 0)
+		return;
+
+	struct Target {
+		int slot;
+		Common::Point center;
+	};
+	Common::Array<Target> targets;
+	for (int i = 1; i < _numVerbs; i++) {
+		const VerbSlot &vs = _verbs[i];
+		if (vs.curmode != 1 || !vs.verbid || vs.saveid)
+			continue;
+		Common::Rect r = vs.curRect;
+		if (vs.center)
+			r.left = 2 * r.left - r.right;
+		r.clip(Common::Rect(_screenWidth, _screenHeight));
+		if (r.isEmpty())
+			continue;
+		Target t = { i, Common::Point((r.left + r.right) / 2, (r.top + r.bottom) / 2) };
+		targets.push_back(t);
+	}
+	if (targets.empty())
+		return;
+
+	// Start from the verb under the cursor; if there is none, go to the
+	// first one in reading order
+	const int current = findVerbAtPos(_mouse.x, _mouse.y);
+	const Target *from = nullptr;
+	for (uint i = 0; i < targets.size(); i++) {
+		if (targets[i].slot == current)
+			from = &targets[i];
+	}
+
+	const Target *best = nullptr;
+	if (!from) {
+		for (uint i = 0; i < targets.size(); i++) {
+			const Common::Point &c = targets[i].center;
+			if (!best || c.y < best->center.y || (c.y == best->center.y && c.x < best->center.x))
+				best = &targets[i];
+		}
+	} else {
+		// The nearest target in the pressed direction, preferring ones in
+		// line with the current one
+		int bestScore = 0;
+		for (uint i = 0; i < targets.size(); i++) {
+			if (&targets[i] == from)
+				continue;
+			const int dx = targets[i].center.x - from->center.x;
+			const int dy = targets[i].center.y - from->center.y;
+			const int along = dx * dirX + dy * dirY;
+			if (along <= 0)
+				continue;
+			const int across = ABS(dx * dirY) + ABS(dy * dirX);
+			const int score = along + 3 * across;
+			if (!best || score < bestScore) {
+				best = &targets[i];
+				bestScore = score;
+			}
+		}
+	}
+	if (!best)
+		return;
+
+	_mouse.x = best->center.x;
+	_mouse.y = best->center.y;
+	_system->warpMouse(_mouse.x * _textSurfaceMultiplier, _mouse.y * _textSurfaceMultiplier);
+}
+
 void ScummEngine::redrawVerbs() {
 	if (_game.version <= 2 && !(_userState & USERSTATE_IFACE_VERBS)) // Don't draw verbs unless active
 		return;

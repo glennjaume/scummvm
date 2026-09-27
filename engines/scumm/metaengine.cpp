@@ -1219,6 +1219,39 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 		keymaps.push_back(insaneKeymap);
 	}
 
+	// Games with an on-screen verb interface: let the d-pad step between
+	// verbs, inventory items and dialog choices
+	if (gameId == "monkey" || gameId == "monkey2" || gameId == "atlantis" || gameId == "indy3" ||
+	    gameId == "zak" || gameId == "maniac") {
+		Keymap *verbKeymap = new Keymap(Keymap::kKeymapTypeGame, "scumm-verb-focus", _("Interface navigation"));
+
+		act = new Action("VERBUP", _("Select the verb or choice above"));
+		act->setCustomEngineActionEvent(kScummActionFocusUp);
+		act->addDefaultInputMapping("JOY_UP");
+		act->addDefaultInputMapping("JOY_HAT_Y-");
+		verbKeymap->addAction(act);
+
+		act = new Action("VERBDOWN", _("Select the verb or choice below"));
+		act->setCustomEngineActionEvent(kScummActionFocusDown);
+		act->addDefaultInputMapping("JOY_DOWN");
+		act->addDefaultInputMapping("JOY_HAT_Y+");
+		verbKeymap->addAction(act);
+
+		act = new Action("VERBLEFT", _("Select the verb or item to the left"));
+		act->setCustomEngineActionEvent(kScummActionFocusLeft);
+		act->addDefaultInputMapping("JOY_LEFT");
+		act->addDefaultInputMapping("JOY_HAT_X-");
+		verbKeymap->addAction(act);
+
+		act = new Action("VERBRIGHT", _("Select the verb or item to the right"));
+		act->setCustomEngineActionEvent(kScummActionFocusRight);
+		act->addDefaultInputMapping("JOY_RIGHT");
+		act->addDefaultInputMapping("JOY_HAT_X+");
+		verbKeymap->addAction(act);
+
+		keymaps.push_back(verbKeymap);
+	}
+
 	if (gameId == "rebel1") {
 		Keymap *rebel1Keymap = new Keymap(Keymap::kKeymapTypeGame, "scumm-rebel1", _("Rebel Assault controls"));
 
