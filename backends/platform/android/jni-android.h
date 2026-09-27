@@ -115,6 +115,7 @@ public:
 	 */
 	static ANativeWindow *lockBottomScreen();
 	static void unlockBottomScreen();
+	static bool hasBottomScreen();
 
 	static inline bool haveSurface();
 	static inline bool swapBuffers();

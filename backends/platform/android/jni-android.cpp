@@ -991,6 +991,12 @@ void JNI::unlockBottomScreen() {
 	pthread_mutex_unlock(&_bottom_window_lock);
 }
 
+bool JNI::hasBottomScreen() {
+	const bool present = (lockBottomScreen() != nullptr);
+	unlockBottomScreen();
+	return present;
+}
+
 void JNI::setBottomScreen(JNIEnv *env, jobject self, jobject surface) {
 	// Called from the UI thread. Taking the lock waits for any frame the
 	// main thread is drawing, so the old window is never released under it.

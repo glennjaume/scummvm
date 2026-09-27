@@ -77,6 +77,7 @@ protected:
 
 private:
 	bool isSecondScreenActive() const;
+	int secondScreenTopRows() const;
 	void syncBottomScreen();
 	void layoutBottomScreen();
 	void drawBottomScreen();

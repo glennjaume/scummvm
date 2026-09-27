@@ -183,6 +183,9 @@ void AndroidGraphicsManager::setSecondScreenLayout(const Common::Array<Common::R
 		return;
 
 	_secondScreenPanels = panels;
+	for (uint i = 0; i < panels.size(); i++)
+		LOGD("second screen panel %u: (%d,%d)-(%d,%d)", i, panels[i].left, panels[i].top, panels[i].right, panels[i].bottom);
+
 	recalculateDisplayAreas();
 	recalculateCursorScaling();
 	_bottomNeedsRedraw = true;
@@ -192,6 +195,8 @@ void AndroidGraphicsManager::setSecondScreenLayout(const Common::Array<Common::R
 void AndroidGraphicsManager::syncBottomScreen() {
 	if (_bottomScreenChangeId == JNI::bottom_screen_changeid)
 		return;
+
+	const bool hadBottomScreen = (_bottomWidth > 0);
 
 	ANativeWindow *window = JNI::lockBottomScreen();
 	_bottomScreenChangeId = JNI::bottom_screen_changeid;
@@ -209,6 +214,10 @@ void AndroidGraphicsManager::syncBottomScreen() {
 	recalculateDisplayAreas();
 	recalculateCursorScaling();
 	_bottomNeedsRedraw = true;
+
+	// The default touch mode depends on whether there is a second screen
+	if (hadBottomScreen != (_bottomWidth > 0))
+		applyTouchSettings();
 }
 
 // Stack the panels top to bottom on the second screen, as large as they fit.
@@ -412,18 +421,29 @@ bool AndroidGraphicsManager::bottomScreenToWindow(int x, int y, Common::Point &w
 	return true;
 }
 
-// Scale the game so the part above the second screen panels fills the main
-// screen. The rest of the game screen ends up below the window's bottom edge.
-void AndroidGraphicsManager::adjustGameDrawRect(Common::Rect &drawRect) const {
+// Number of game screen rows left on the main screen, or 0 when the second
+// screen is not in use
+int AndroidGraphicsManager::secondScreenTopRows() const {
 	if (!isSecondScreenActive())
-		return;
+		return 0;
 
 	const int gameHeight = getHeight();
 	int topHeight = gameHeight;
 	for (uint i = 0; i < _secondScreenPanels.size(); i++)
 		topHeight = MIN<int>(topHeight, _secondScreenPanels[i].top);
 	if (topHeight <= 0 || topHeight >= gameHeight)
+		return 0;
+	return topHeight;
+}
+
+// Scale the game so the part above the second screen panels fills the main
+// screen. The rest of the game screen ends up below the window's bottom edge.
+void AndroidGraphicsManager::adjustGameDrawRect(Common::Rect &drawRect) const {
+	const int topHeight = secondScreenTopRows();
+	if (!topHeight)
 		return;
+
+	const int gameHeight = getHeight();
 
 	// Aspect ratio of what stays on the main screen
 	const frac_t topAspect = getDesiredGameAspectRatio() * gameHeight / topHeight;
@@ -455,6 +475,18 @@ void AndroidGraphicsManager::recalculateDisplayAreas() {
 	// Aspect ratio correction changes how tall the second screen panels are
 	layoutBottomScreen();
 	_bottomNeedsRedraw = true;
+
+	// The game draw rect reaches past the window's bottom edge, but when the
+	// window is taller than the room, the top rows of the interface would
+	// still show below it. Clip the game to the room.
+	const int topRows = secondScreenTopRows();
+	if (topRows > 0) {
+		const int visibleBottom = _gameDrawRect.top + _gameDrawRect.height() * topRows / getHeight();
+		_targetBuffer->setScissorBox(_gameDrawRect.left,
+		                             _windowHeight - visibleBottom,
+		                             _gameDrawRect.width(),
+		                             visibleBottom - _gameDrawRect.top);
+	}
 
 	int offsetX = _activeArea.drawRect.left - oldDrawRect.left;
 	int offsetY = _activeArea.drawRect.top - oldDrawRect.top;

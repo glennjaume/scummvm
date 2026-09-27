@@ -532,9 +532,10 @@ void ScummEngine::updateSecondScreenLayout() {
 
 	const Common::Rect area(0, verbScreen.topline, _screenWidth, _screenHeight);
 
-	// Find the visible verbs, and which columns they use
+	// Find the visible verbs, which columns they use, and where they start
 	int verbsTop = area.bottom;
 	Common::Array<bool> used(_screenWidth, false);
+	Common::Array<bool> straddled(_screenWidth, false);
 	for (int i = 1; i < _numVerbs; i++) {
 		const VerbSlot &vs = _verbs[i];
 		// Dimmed verbs (mode 2) still take up space
@@ -547,8 +548,11 @@ void ScummEngine::updateSecondScreenLayout() {
 		if (r.isEmpty())
 			continue;
 		verbsTop = MIN<int>(verbsTop, r.top);
-		for (int x = r.left; x < r.right; x++)
+		for (int x = r.left; x < r.right; x++) {
 			used[x] = true;
+			if (x > r.left)
+				straddled[x] = true;
+		}
 	}
 
 	Common::Array<Common::Rect> panels;
@@ -565,23 +569,28 @@ void ScummEngine::updateSecondScreenLayout() {
 		else
 			verbsTop = area.top;
 
-		// Split verbs and inventory at the widest empty column run near the
-		// middle. Dialog choices span the full width, so they stay whole.
-		int bestStart = 0, bestLen = 0;
+		// Split verbs and inventory where no verb straddles the line, as close
+		// to the middle as possible. Verbs and inventory can sit right next
+		// to each other (e.g. the MI2 inventory arrows), so a split may fall
+		// between two touching verbs. Dialog choices span the full width, so
+		// they stay whole.
+		int split = -1;
 		for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
-			if (used[x])
-				continue;
-			int start = x;
-			while (x < _screenWidth * 3 / 4 && !used[x])
-				x++;
-			if (x - start > bestLen) {
-				bestStart = start;
-				bestLen = x - start;
-			}
+			if (!straddled[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
+				split = x;
 		}
 
-		if (bestLen >= 4) {
-			int split = bestStart + bestLen / 2;
+		// Center the split in the empty columns around it
+		if (split >= 0 && !used[split]) {
+			int left = split, right = split;
+			while (left > 0 && !used[left - 1])
+				left--;
+			while (right < _screenWidth && !used[right])
+				right++;
+			split = (left + right) / 2;
+		}
+
+		if (split > 0) {
 			panels.push_back(Common::Rect(0, verbsTop, split, area.bottom));
 			panels.push_back(Common::Rect(split, verbsTop, _screenWidth, area.bottom));
 		} else {
