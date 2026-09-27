@@ -51,8 +51,22 @@ jobs:
             -DOGG_INCLUDE_DIR="$PREFIX/include" -DOGG_LIBRARY="$PREFIX/lib/libogg.a"
           cmake --build /tmp/vorbis/build --target install -j4
 
+      # Oboe is ScummVM's Android audio output library
+      - name: Build Oboe
+        run: |
+          git clone --depth 1 --branch 1.9.3 https://github.com/google/oboe.git /tmp/oboe
+          cmake -S /tmp/oboe -B /tmp/oboe/build \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=$ABI -DANDROID_PLATFORM=android-$ANDROID_API \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+          cmake --build /tmp/oboe/build -j4
+          mkdir -p "$ANDROID_LIBS/include" "$ANDROID_LIBS/lib"
+          cp -r /tmp/oboe/include/oboe "$ANDROID_LIBS/include/"
+          cp /tmp/oboe/build/liboboe.a "$ANDROID_LIBS/lib/"
+
       - name: Configure
         run: |
+          export CXXFLAGS="-I$ANDROID_LIBS/include" LDFLAGS="-L$ANDROID_LIBS/lib"
           ./configure --host=android-$ABI \
             --disable-all-engines --enable-engine=scumm \
             --with-ogg-prefix="$ANDROID_LIBS" --with-vorbis-prefix="$ANDROID_LIBS" \
