@@ -1,0 +1,65 @@
+name: Android dual screen build
+
+# Builds a debug APK of ScummVM with only the SCUMM engine, for sideloading on
+# dual-screen handhelds such as the AYN Thor.
+
+on:
+  push:
+    branches: [dual-screen]
+  pull_request:
+    branches: [dual-screen]
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: "23.2.8568313"
+      ANDROID_API: "21"
+      ABI: arm64-v8a
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install the NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      # Ogg Vorbis lets ScummVM play compressed voice and music, such as the
+      # Monkey Island Ultimate Talkie builds made with the OGG option.
+      - name: Build libogg and libvorbis
+        run: |
+          PREFIX="$PWD/android-libs"
+          echo "ANDROID_LIBS=$PREFIX" >> "$GITHUB_ENV"
+          CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=$ABI -DANDROID_PLATFORM=android-$ANDROID_API \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_PREFIX_PATH=$PREFIX"
+          git clone --depth 1 --branch v1.3.5 https://github.com/xiph/ogg.git /tmp/ogg
+          cmake -S /tmp/ogg -B /tmp/ogg/build $CMAKE_ARGS -DINSTALL_DOCS=OFF
+          cmake --build /tmp/ogg/build --target install -j4
+          git clone --depth 1 --branch v1.3.7 https://github.com/xiph/vorbis.git /tmp/vorbis
+          cmake -S /tmp/vorbis -B /tmp/vorbis/build $CMAKE_ARGS
+          cmake --build /tmp/vorbis/build --target install -j4
+
+      - name: Configure
+        run: |
+          ./configure --host=android-$ABI \
+            --disable-all-engines --enable-engine=scumm \
+            --with-ogg-prefix="$ANDROID_LIBS" --with-vorbis-prefix="$ANDROID_LIBS" \
+            --disable-debug
+
+      - name: Build the APK
+        run: make -j4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scummvm-dualscreen-debug-apk
+          path: "*.apk"
