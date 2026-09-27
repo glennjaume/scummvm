@@ -624,10 +624,8 @@ void ScummEngine::updateSecondScreenLayout() {
 
 	const Common::Rect area(0, verbScreen.topline, _screenWidth, _screenHeight);
 
-	// Find the visible verbs, which columns they use, and where they start
-	int verbsTop = area.bottom;
-	Common::Array<bool> used(_screenWidth, false);
-	Common::Array<bool> straddled(_screenWidth, false);
+	// Find the visible verbs
+	Common::Array<Common::Rect> rects;
 	for (int i = 1; i < _numVerbs; i++) {
 		const VerbSlot &vs = _verbs[i];
 		// Dimmed verbs (mode 2) still take up space
@@ -637,7 +635,38 @@ void ScummEngine::updateSecondScreenLayout() {
 		if (vs.center)
 			r.left = 2 * r.left - r.right;
 		r.clip(area);
-		if (r.isEmpty())
+		if (!r.isEmpty())
+			rects.push_back(r);
+	}
+
+	// Some games draw the sentence line as a verb of its own, alone on the
+	// top row. It spans the full width, so leave it out of the split.
+	int topRowCount = 0;
+	int topRowBottom = area.top;
+	int minTop = area.bottom;
+	for (uint i = 0; i < rects.size(); i++)
+		minTop = MIN<int>(minTop, rects[i].top);
+	for (uint i = 0; i < rects.size(); i++) {
+		if (rects[i].top < minTop + 4) {
+			topRowCount++;
+			topRowBottom = rects[i].bottom;
+		}
+	}
+	bool sentenceVerb = false;
+	if (topRowCount == 1) {
+		for (uint i = 0; i < rects.size(); i++) {
+			if (rects[i].top >= topRowBottom - 1)
+				sentenceVerb = true;
+		}
+	}
+
+	// Which columns the other verbs use, and where they start
+	int verbsTop = area.bottom;
+	Common::Array<bool> used(_screenWidth, false);
+	Common::Array<bool> straddled(_screenWidth, false);
+	for (uint i = 0; i < rects.size(); i++) {
+		const Common::Rect &r = rects[i];
+		if (sentenceVerb && r.top < minTop + 4)
 			continue;
 		verbsTop = MIN<int>(verbsTop, r.top);
 		for (int x = r.left; x < r.right; x++) {
@@ -661,24 +690,27 @@ void ScummEngine::updateSecondScreenLayout() {
 		else
 			verbsTop = area.top;
 
-		// Split verbs and inventory where no verb straddles the line, as close
-		// to the middle as possible. Verbs and inventory can sit right next
-		// to each other (e.g. the MI2 inventory arrows), so a split may fall
-		// between two touching verbs.
+		// Split verbs and inventory in the empty columns closest to the
+		// middle. If they touch (e.g. the MI2 inventory arrows), split
+		// between two verbs instead.
 		int split = -1;
 		for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
-			if (!straddled[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
+			if (!used[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
 				split = x;
 		}
-
-		// Center the split in the empty columns around it
-		if (split >= 0 && !used[split]) {
+		if (split >= 0) {
+			// Center the split in the empty columns around it
 			int left = split, right = split;
 			while (left > 0 && !used[left - 1])
 				left--;
 			while (right < _screenWidth && !used[right])
 				right++;
 			split = (left + right) / 2;
+		} else {
+			for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
+				if (!straddled[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
+					split = x;
+			}
 		}
 
 		if (split > 0) {
@@ -702,6 +734,7 @@ void ScummEngine::focusNextVerb(int dirX, int dirY) {
 
 	struct Target {
 		int slot;
+		Common::Rect rect;
 		Common::Point center;
 	};
 	Common::Array<Target> targets;
@@ -715,7 +748,7 @@ void ScummEngine::focusNextVerb(int dirX, int dirY) {
 		r.clip(Common::Rect(_screenWidth, _screenHeight));
 		if (r.isEmpty())
 			continue;
-		Target t = { i, Common::Point((r.left + r.right) / 2, (r.top + r.bottom) / 2) };
+		Target t = { i, r, Common::Point((r.left + r.right) / 2, (r.top + r.bottom) / 2) };
 		targets.push_back(t);
 	}
 	if (targets.empty())
@@ -739,17 +772,24 @@ void ScummEngine::focusNextVerb(int dirX, int dirY) {
 		}
 	} else {
 		// The nearest target in the pressed direction, preferring ones in
-		// line with the current one
+		// line with the current one. Targets count as in line when they
+		// overlap it sideways, so dialog choices of any length follow each
+		// other row by row.
 		int bestScore = 0;
 		for (uint i = 0; i < targets.size(); i++) {
 			if (&targets[i] == from)
 				continue;
+			const Common::Rect &r = targets[i].rect;
 			const int dx = targets[i].center.x - from->center.x;
 			const int dy = targets[i].center.y - from->center.y;
 			const int along = dx * dirX + dy * dirY;
 			if (along <= 0)
 				continue;
-			const int across = ABS(dx * dirY) + ABS(dy * dirX);
+			int across;
+			if (dirY)
+				across = MAX(0, MAX(r.left - from->rect.right, from->rect.left - r.right));
+			else
+				across = MAX(0, MAX(r.top - from->rect.bottom, from->rect.top - r.bottom));
 			const int score = along + 3 * across;
 			if (!best || score < bestScore) {
 				best = &targets[i];
@@ -763,6 +803,13 @@ void ScummEngine::focusNextVerb(int dirX, int dirY) {
 	_mouse.x = best->center.x;
 	_mouse.y = best->center.y;
 	_system->warpMouse(_mouse.x * _textSurfaceMultiplier, _mouse.y * _textSurfaceMultiplier);
+
+	// Not every backend reports a warp back as mouse movement, and buttons
+	// mapped to clicks land where the event manager last saw the mouse
+	Common::Event move;
+	move.type = Common::EVENT_MOUSEMOVE;
+	move.mouse = Common::Point(_mouse.x * _textSurfaceMultiplier, _mouse.y * _textSurfaceMultiplier);
+	_system->getEventManager()->pushEvent(move);
 }
 
 void ScummEngine::redrawVerbs() {
