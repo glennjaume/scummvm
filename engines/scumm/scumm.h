@@ -546,6 +546,7 @@ public:
 	Sound *_sound = nullptr;
 
 	VerbSlot *_verbs = nullptr;
+	Common::Array<Common::Rect> _secondScreenPanels;
 	ObjectData *_objs = nullptr;
 
 	// Core variables
@@ -1419,6 +1420,7 @@ public:
 
 protected:
 	void initScreens(int b, int h);
+	void updateSecondScreenLayout();
 	void initVirtScreen(VirtScreenNumber slot, int top, int width, int height, bool twobufs, bool scrollable);
 	void initBGBuffers(int height);
 	void initCycl(const byte *ptr);	// Color cycle

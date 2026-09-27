@@ -477,6 +477,8 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
 
 
 ScummEngine::~ScummEngine() {
+	_system->setSecondScreenLayout(Common::Array<Common::Rect>());
+
 	delete _musicEngine;
 
 	// Delete the sound object earlier than the actors
@@ -3338,6 +3340,8 @@ load_game:
 		if (_game.version <= 5)
 			playActorSounds();
 	}
+
+	updateSecondScreenLayout();
 
 	scummLoop_handleSound();
 

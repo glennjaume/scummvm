@@ -515,6 +515,86 @@ void ScummEngine_v2::redrawV2Inventory() {
 	}
 }
 
+void ScummEngine::updateSecondScreenLayout() {
+	// Offer the sentence line, verbs and inventory to backends with a second
+	// screen. Only do this when the game screen maps 1:1 onto the backend
+	// screen, which rules out upscaled modes such as CJK, Hercules or FM-Towns.
+	const VirtScreen &verbScreen = _virtscr[kVerbVirtScreen];
+	if (verbScreen.h <= 0 ||
+	    (int)_system->getWidth() != _screenWidth ||
+	    (int)_system->getHeight() != _screenHeight) {
+		if (!_secondScreenPanels.empty()) {
+			_secondScreenPanels.clear();
+			_system->setSecondScreenLayout(_secondScreenPanels);
+		}
+		return;
+	}
+
+	const Common::Rect area(0, verbScreen.topline, _screenWidth, _screenHeight);
+
+	// Find the visible verbs, and which columns they use
+	int verbsTop = area.bottom;
+	Common::Array<bool> used(_screenWidth, false);
+	for (int i = 1; i < _numVerbs; i++) {
+		const VerbSlot &vs = _verbs[i];
+		// Dimmed verbs (mode 2) still take up space
+		if (!vs.curmode || !vs.verbid || vs.saveid)
+			continue;
+		Common::Rect r = vs.curRect;
+		if (vs.center)
+			r.left = 2 * r.left - r.right;
+		r.clip(area);
+		if (r.isEmpty())
+			continue;
+		verbsTop = MIN<int>(verbsTop, r.top);
+		for (int x = r.left; x < r.right; x++)
+			used[x] = true;
+	}
+
+	Common::Array<Common::Rect> panels;
+	if (verbsTop == area.bottom) {
+		// No verbs on screen (e.g. a cutscene): keep whatever layout we had,
+		// so the second screen does not jump around.
+		if (!_secondScreenPanels.empty() && _secondScreenPanels[0].top == area.top)
+			return;
+		panels.push_back(area);
+	} else {
+		// The sentence line sits above the verbs and spans the full width
+		if (verbsTop - area.top >= 4)
+			panels.push_back(Common::Rect(0, area.top, _screenWidth, verbsTop));
+		else
+			verbsTop = area.top;
+
+		// Split verbs and inventory at the widest empty column run near the
+		// middle. Dialog choices span the full width, so they stay whole.
+		int bestStart = 0, bestLen = 0;
+		for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
+			if (used[x])
+				continue;
+			int start = x;
+			while (x < _screenWidth * 3 / 4 && !used[x])
+				x++;
+			if (x - start > bestLen) {
+				bestStart = start;
+				bestLen = x - start;
+			}
+		}
+
+		if (bestLen >= 4) {
+			int split = bestStart + bestLen / 2;
+			panels.push_back(Common::Rect(0, verbsTop, split, area.bottom));
+			panels.push_back(Common::Rect(split, verbsTop, _screenWidth, area.bottom));
+		} else {
+			panels.push_back(Common::Rect(0, verbsTop, _screenWidth, area.bottom));
+		}
+	}
+
+	if (panels == _secondScreenPanels)
+		return;
+	_secondScreenPanels = panels;
+	_system->setSecondScreenLayout(_secondScreenPanels);
+}
+
 void ScummEngine::redrawVerbs() {
 	if (_game.version <= 2 && !(_userState & USERSTATE_IFACE_VERBS)) // Don't draw verbs unless active
 		return;

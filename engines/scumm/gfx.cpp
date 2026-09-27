@@ -389,6 +389,8 @@ void ScummEngine::initScreens(int b, int h) {
 	_screenB = b;
 	_screenH = h;
 
+	updateSecondScreenLayout();
+
 	_gdi->init();
 
 #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
