@@ -1719,6 +1719,35 @@ void ScummEngine::setVerbObject(uint room, uint object, uint verb) {
 	}
 }
 
+void ScummEngine::clickObjectAhead(const Common::Point &pos, const Common::Point &step) {
+	// Look a little way ahead of the character's feet, and a bit above them
+	// too, since doors and paths are drawn above where the character stands
+	const VirtScreen &mainScreen = _virtscr[kMainVirtScreen];
+	for (int distance = 1; distance <= 4; distance++) {
+		for (int lift = 0; lift <= 16; lift += 8) {
+			const int x = pos.x + step.x * distance / 4;
+			const int y = pos.y + step.y * distance / 4 - lift;
+			if (!findObject(x, y))
+				continue;
+
+			const int screenX = x - mainScreen.xstart;
+			const int screenY = y + mainScreen.topline;
+			if (screenX < 0 || screenX >= _screenWidth || screenY < mainScreen.topline || screenY >= mainScreen.topline + mainScreen.h)
+				continue;
+
+			Common::Event event;
+			event.mouse = Common::Point(screenX * _textSurfaceMultiplier, screenY * _textSurfaceMultiplier);
+			event.type = Common::EVENT_MOUSEMOVE;
+			_system->getEventManager()->pushEvent(event);
+			event.type = Common::EVENT_LBUTTONDOWN;
+			_system->getEventManager()->pushEvent(event);
+			event.type = Common::EVENT_LBUTTONUP;
+			_system->getEventManager()->pushEvent(event);
+			return;
+		}
+	}
+}
+
 void ScummEngine::updateStickWalk() {
 	// Walk the player's character towards where the stick points, by giving
 	// it a new walk target a little way ahead every few frames. The game's
@@ -1751,10 +1780,25 @@ void ScummEngine::updateStickWalk() {
 			_stickWalking = false;
 			a->startWalkActor(pos.x + _stickWalkStep.x / 8, pos.y + _stickWalkStep.y / 8, -1);
 		}
+		_stickClickedExit = false;
 		return;
 	}
 
 	const uint32 now = _system->getMillis();
+
+	// Exits are objects the player clicks rather than places to walk into.
+	// When the character is held against the edge of the walkable area,
+	// click whatever object is just ahead, once per push.
+	if (_stickWalking && !a->_moving && pos == _stickBlockedPos) {
+		if (!_stickClickedExit && now - _stickBlockedSince >= 400) {
+			_stickClickedExit = true;
+			clickObjectAhead(pos, _stickWalkStep);
+		}
+	} else if (pos != _stickBlockedPos) {
+		_stickBlockedPos = pos;
+		_stickBlockedSince = now;
+		_stickClickedExit = false;
+	}
 	const float length = sqrtf((float)_walkStickX * _walkStickX + (float)_walkStickY * _walkStickY);
 	const int lookAhead = 32;
 	const Common::Point step((int)(lookAhead * _walkStickX / length), (int)(lookAhead * _walkStickY / length));
