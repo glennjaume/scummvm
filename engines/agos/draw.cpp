@@ -534,6 +534,7 @@ void AGOSEngine::displayBoxStars() {
 		color = 225;
 
 	uint curHeight = (getGameType() == GType_SIMON2) ? _boxStarHeight : 134;
+	debug("AGOS box stars: height %u, scroll %d", curHeight, _scrollX);
 
 
 	for (int i = 0; i < 5; i++) {

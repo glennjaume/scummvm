@@ -611,10 +611,17 @@ protected:
 	// Second screen support, see secondscreen.cpp
 	Common::Array<Common::Rect> _secondScreenPanels;
 	Common::Array<bool> _secondScreenBeside;
+	bool _secondScreenDialog;
+	Common::Array<Common::Rect> _secondScreenGameplayPanels;
+	Common::Array<bool> _secondScreenGameplayBeside;
+	Common::Array<Common::Rect> _secondScreenChoices;
+	Common::Array<int> _secondScreenChoiceEnds;
 	Common::String _secondScreenBoxes;
 	bool _boxStarsRequested;
 	bool usesSecondScreen() const;
-	bool getInterfaceBoxes(Common::Array<Common::Rect> &boxes, bool &dialog, Common::Rect &inventory) const;
+	bool getInterfaceBoxes(Common::Array<Common::Rect> &boxes, bool &dialog, Common::Rect &inventory,
+	                       Common::Array<Common::Rect> *verbBoxes = nullptr) const;
+	int findTextEnd(const Common::Rect &box);
 	void updateSecondScreenLayout();
 	void logInterfaceBoxes();
 	void focusNextBox(int dirX, int dirY);
