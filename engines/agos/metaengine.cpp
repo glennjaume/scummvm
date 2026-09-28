@@ -265,7 +265,32 @@ Common::KeymapArray AgosMetaEngine::initKeymaps(const char *target) const {
 		act = new Action("SHOWOBJINTERACT", _("Show objects to interact"));
 		act->setCustomEngineActionEvent(kActionShowObjects);
 		act->addDefaultInputMapping("F10");
+		act->addDefaultInputMapping("JOY_X");
+		gameKeyMap->addAction(act);
+
+		// The d-pad steps between the verbs, inventory and dialog choices
+		act = new Action("FOCUSUP", _("Select the verb or choice above"));
+		act->setCustomEngineActionEvent(kActionFocusUp);
 		act->addDefaultInputMapping("JOY_UP");
+		act->addDefaultInputMapping("JOY_HAT_Y-");
+		gameKeyMap->addAction(act);
+
+		act = new Action("FOCUSDOWN", _("Select the verb or choice below"));
+		act->setCustomEngineActionEvent(kActionFocusDown);
+		act->addDefaultInputMapping("JOY_DOWN");
+		act->addDefaultInputMapping("JOY_HAT_Y+");
+		gameKeyMap->addAction(act);
+
+		act = new Action("FOCUSLEFT", _("Select the verb or item to the left"));
+		act->setCustomEngineActionEvent(kActionFocusLeft);
+		act->addDefaultInputMapping("JOY_LEFT");
+		act->addDefaultInputMapping("JOY_HAT_X-");
+		gameKeyMap->addAction(act);
+
+		act = new Action("FOCUSRIGHT", _("Select the verb or item to the right"));
+		act->setCustomEngineActionEvent(kActionFocusRight);
+		act->addDefaultInputMapping("JOY_RIGHT");
+		act->addDefaultInputMapping("JOY_HAT_X+");
 		gameKeyMap->addAction(act);
 
 		if (gameId == "simon2") {

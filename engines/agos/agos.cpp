@@ -1083,6 +1083,7 @@ const AGOSEngine::PnAmigaTextPlane *AGOSEngine::getPnAmigaTextPlane(const Window
 
 
 AGOSEngine::~AGOSEngine() {
+	_system->setSecondScreenLayout(Common::Array<Common::Rect>());
 	_system->getAudioCDManager()->stop();
 	stopMusic();
 	delete _pnAmigaFont;

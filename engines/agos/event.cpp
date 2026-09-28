@@ -508,6 +508,14 @@ void AGOSEngine::delay(uint amount) {
 				_action = (AGOSAction)event.customType;
 				if (event.customType == kActionToggleFastMode) {
 					_fastMode = !_fastMode;
+				} else if (event.customType == kActionFocusUp) {
+					focusNextBox(0, -1);
+				} else if (event.customType == kActionFocusDown) {
+					focusNextBox(0, 1);
+				} else if (event.customType == kActionFocusLeft) {
+					focusNextBox(-1, 0);
+				} else if (event.customType == kActionFocusRight) {
+					focusNextBox(1, 0);
 				} else if (event.customType == kActionToggleFightMode && getGameId() == GID_WAXWORKS) {
 					HitArea *fightButton = findBox(117);
 

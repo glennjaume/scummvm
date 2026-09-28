@@ -106,7 +106,11 @@ enum AGOSAction {
 	kActionSpeed_GTYPEPP,
 	kActionKeyYes,
 	kActionKeyNo,
-	kActionPause
+	kActionPause,
+	kActionFocusUp,
+	kActionFocusDown,
+	kActionFocusLeft,
+	kActionFocusRight
 };
 
 uint fileReadItemID(Common::SeekableReadStream *in);
@@ -603,6 +607,13 @@ protected:
 	byte _stringReturnBuffer[2][180];
 
 	HitArea _hitAreas[250];
+
+	// Second screen support, see secondscreen.cpp
+	Common::Array<Common::Rect> _secondScreenPanels;
+	bool usesSecondScreen() const;
+	bool getInterfaceBoxes(Common::Array<Common::Rect> &boxes, bool &dialog) const;
+	void updateSecondScreenLayout();
+	void focusNextBox(int dirX, int dirY);
 	HitArea *_hitAreaList;
 
 	AnimTable _screenAnim1[90];

@@ -48,6 +48,7 @@ MODULE_OBJS := \
 	string.o \
 	string_pn.o \
 	subroutine.o \
+	secondscreen.o \
 	verb.o \
 	verb_pn.o \
 	vga.o \

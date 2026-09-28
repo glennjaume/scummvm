@@ -903,6 +903,8 @@ void AGOSEngine::drawSimon2LanguageFlag() {
 }
 
 void AGOSEngine::displayScreen() {
+	updateSecondScreenLayout();
+
 	if (_fastFadeInFlag == 0 && _paletteFlag == 1) {
 		_paletteFlag = 0;
 		if (memcmp(_displayPalette, _currentPalette, sizeof(_currentPalette)) != 0) {
