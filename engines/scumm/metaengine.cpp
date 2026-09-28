@@ -1221,7 +1221,7 @@ Common::KeymapArray ScummMetaEngine::initKeymaps(const char *target) const {
 
 	// Games with an on-screen verb interface: let the d-pad step between
 	// verbs, inventory items and dialog choices
-	if (gameId == "monkey" || gameId == "monkey2" || gameId == "atlantis" || gameId == "indy3" ||
+	if (gameId == "monkey" || gameId == "monkey2" || gameId == "atlantis" || gameId == "tentacle" || gameId == "indy3" ||
 	    gameId == "zak" || gameId == "maniac") {
 		Keymap *verbKeymap = new Keymap(Keymap::kKeymapTypeGame, "scumm-verb-focus", _("Controller navigation"));
 
