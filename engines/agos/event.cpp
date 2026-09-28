@@ -508,6 +508,9 @@ void AGOSEngine::delay(uint amount) {
 				_action = (AGOSAction)event.customType;
 				if (event.customType == kActionToggleFastMode) {
 					_fastMode = !_fastMode;
+				} else if (event.customType == kActionShowObjects) {
+					// Show the stars once even for a quick press
+					_boxStarsRequested = true;
 				} else if (event.customType == kActionFocusUp) {
 					focusNextBox(0, -1);
 				} else if (event.customType == kActionFocusDown) {

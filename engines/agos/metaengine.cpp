@@ -319,13 +319,16 @@ Common::KeymapArray AgosMetaEngine::initKeymaps(const char *target) const {
 		act = new Action("TOGGLESUB", _("Switches between speech only and combined speech and subtitles"));
 		act->setCustomEngineActionEvent(kActionToggleSubtitle);
 		act->addDefaultInputMapping("t");
-		act->addDefaultInputMapping("JOY_LEFT");
+		// In Simon 2 the d-pad steps between the verbs and inventory instead
+		if (gameId == "feeble")
+			act->addDefaultInputMapping("JOY_LEFT");
 		gameKeyMap->addAction(act);
 
 		act = new Action("TOGGLESPEECH", _("Switches between subtitles only and combined speech and subtitles"));
 		act->setCustomEngineActionEvent(kActionToggleSpeech);
 		act->addDefaultInputMapping("v");
-		act->addDefaultInputMapping("JOY_RIGHT");
+		if (gameId == "feeble")
+			act->addDefaultInputMapping("JOY_RIGHT");
 		gameKeyMap->addAction(act);
 	}
 

@@ -1380,8 +1380,12 @@ public:
 	 *               cover the game screen from the top of the first panel
 	 *               to its bottom edge. An empty array means the game
 	 *               currently has no interface area.
+	 * @param besidePrevious For each panel, whether it goes to the right of
+	 *               the panel before it instead of below it, e.g. to join
+	 *               two groups of verbs into one row. May be empty.
 	 */
-	virtual void setSecondScreenLayout(const Common::Array<Common::Rect> &panels) {}
+	virtual void setSecondScreenLayout(const Common::Array<Common::Rect> &panels,
+	                                   const Common::Array<bool> &besidePrevious = Common::Array<bool>()) {}
 
 	/**
 	 * Instruct the backend to capture a screenshot of the current screen.

@@ -40,71 +40,118 @@ bool AGOSEngine::usesSecondScreen() const {
 	       (int)_system->getWidth() == _screenWidth && (int)_system->getHeight() == _screenHeight;
 }
 
-bool AGOSEngine::getInterfaceBoxes(Common::Array<Common::Rect> &boxes, bool &dialog) const {
+bool AGOSEngine::getInterfaceBoxes(Common::Array<Common::Rect> &boxes, bool &dialog, Common::Rect &inventory) const {
 	// Simon 2 sometimes uses the whole screen for the room
 	if (getGameType() == GType_SIMON2 && const_cast<AGOSEngine *>(this)->getBitFlag(79))
 		return false;
 
-	const Common::Rect area(0, kInterfaceTop, _screenWidth, _screenHeight);
-	auto inArea = [&](const HitArea &ha) {
-		return Common::Rect(ha.x, ha.y, ha.x + ha.width, ha.y + ha.height).findIntersectingRect(area);
-	};
+	// Nothing can be picked while the mouse is off, e.g. in the intro and
+	// cutscenes
+	if (_mouseHideCount)
+		return true;
 
-	// The save and load dialog covers the whole screen. Its file slots are
-	// only enabled while it is open.
-	bool verbs = false;
-	dialog = false;
+	const Common::Rect area(0, kInterfaceTop, _screenWidth, _screenHeight);
+
+	Common::Array<Common::Rect> verbs, items, texts, others;
 	for (uint i = 0; i < ARRAYSIZE(_hitAreas); i++) {
 		const HitArea &ha = _hitAreas[i];
 		if (!(ha.flags & kBFBoxInUse) || (ha.flags & kBFBoxDead))
 			continue;
+		// The save and load dialog covers the whole screen. Its file slots
+		// are only enabled while it is open.
 		if (ha.id >= 208 && ha.id <= 213)
 			return false;
-		if (inArea(ha).isEmpty())
+		if (ha.id >= 200 && ha.id <= 213)
 			continue;
-		if (ha.id >= 101 && ha.id <= 112)
-			verbs = true;
+		const Common::Rect r = Common::Rect(ha.x, ha.y, ha.x + ha.width, ha.y + ha.height).findIntersectingRect(area);
+		if (r.isEmpty())
+			continue;
 		if (ha.flags & kBFTextBox)
-			dialog = true;
+			texts.push_back(r);
+		else if (ha.id >= 101 && ha.id <= 112)
+			verbs.push_back(r);
+		else if ((ha.flags & kBFBoxItem) || ha.id == 0x7FFB || ha.id == 0x7FFC || ha.id == 0x7FFD)
+			items.push_back(r);
+		else
+			others.push_back(r);
 	}
 
-	// Without verbs or choices, the interface is not showing, e.g. in the
-	// intro, and there is nothing to lay out
-	if (!verbs && !dialog)
-		return true;
-
-	for (uint i = 0; i < ARRAYSIZE(_hitAreas); i++) {
-		const HitArea &ha = _hitAreas[i];
-		if (!(ha.flags & kBFBoxInUse) || (ha.flags & kBFBoxDead) || (ha.id >= 200 && ha.id <= 213))
-			continue;
+	dialog = false;
+	inventory = Common::Rect();
+	if (!texts.empty()) {
 		// During conversations, only the choices can be picked
-		if (dialog && !(ha.flags & kBFTextBox))
-			continue;
-		const Common::Rect r = inArea(ha);
-		// Boxes spanning most of the interface, such as the sentence line,
-		// are neither verbs nor items
-		if (!dialog && r.width() >= _screenWidth * 3 / 4)
-			continue;
-		if (!r.isEmpty())
-			boxes.push_back(r);
+		dialog = true;
+		boxes = texts;
+	} else if (!verbs.empty()) {
+		boxes = verbs;
+		for (uint i = 0; i < items.size(); i++) {
+			boxes.push_back(items[i]);
+			if (inventory.isEmpty())
+				inventory = items[i];
+			else
+				inventory.extend(items[i]);
+		}
+		// Boxes spanning most of the interface are neither verbs nor items
+		for (uint i = 0; i < others.size(); i++) {
+			if (others[i].width() < _screenWidth * 3 / 4)
+				boxes.push_back(others[i]);
+		}
+	} else if (!others.empty()) {
+		// Without verbs, the interface shows choices, such as yes and no
+		dialog = true;
+		boxes = others;
+	}
+
+	// Leave out boxes around other boxes, which only catch stray clicks
+	if (dialog) {
+		for (uint i = 0; i < boxes.size();) {
+			bool around = false;
+			for (uint j = 0; j < boxes.size() && !around; j++)
+				around = (j != i && boxes[i].contains(boxes[j]) && boxes[i] != boxes[j]);
+			if (around)
+				boxes.remove_at(i);
+			else
+				i++;
+		}
 	}
 	return true;
+}
+
+void AGOSEngine::logInterfaceBoxes() {
+	// Log the interface boxes when they change, to help tune the layout
+	Common::String dump;
+	for (uint i = 0; i < ARRAYSIZE(_hitAreas); i++) {
+		const HitArea &ha = _hitAreas[i];
+		if (!(ha.flags & kBFBoxInUse) || ha.y + ha.height <= kInterfaceTop)
+			continue;
+		dump += Common::String::format(" %d:(%d,%d,%dx%d)%x", ha.id, ha.x, ha.y, ha.width, ha.height, ha.flags);
+	}
+	dump += Common::String::format(" mouse %s", _mouseHideCount ? "off" : "on");
+	if (dump != _secondScreenBoxes) {
+		_secondScreenBoxes = dump;
+		debug("AGOS second screen boxes:%s", dump.c_str());
+	}
 }
 
 void AGOSEngine::updateSecondScreenLayout() {
 	if (!usesSecondScreen()) {
 		if (!_secondScreenPanels.empty()) {
 			_secondScreenPanels.clear();
+			_secondScreenBeside.clear();
 			_system->setSecondScreenLayout(_secondScreenPanels);
 		}
 		return;
 	}
 
+	logInterfaceBoxes();
+
 	const Common::Rect area(0, kInterfaceTop, _screenWidth, _screenHeight);
 	Common::Array<Common::Rect> boxes;
 	bool dialog = false;
+	Common::Rect inventory;
 	Common::Array<Common::Rect> panels;
-	if (!getInterfaceBoxes(boxes, dialog)) {
+	Common::Array<bool> beside;
+	if (!getInterfaceBoxes(boxes, dialog, inventory)) {
 		// Show the whole game on the main screen
 	} else if (boxes.empty()) {
 		// Nothing to pick (e.g. a cutscene): keep the layout we had, so the
@@ -122,17 +169,8 @@ void AGOSEngine::updateSecondScreenLayout() {
 		}
 	} else {
 		int boxesTop = area.bottom;
-		Common::Array<bool> used(_screenWidth, false);
-		Common::Array<bool> straddled(_screenWidth, false);
-		for (uint i = 0; i < boxes.size(); i++) {
-			const Common::Rect &r = boxes[i];
-			boxesTop = MIN<int>(boxesTop, r.top);
-			for (int x = r.left; x < r.right; x++) {
-				used[x] = true;
-				if (x > r.left)
-					straddled[x] = true;
-			}
-		}
+		for (uint i = 0; i < boxes.size(); i++)
+			boxesTop = MIN<int>(boxesTop, boxes[i].top);
 
 		// The sentence line sits above the verbs and spans the full width
 		if (boxesTop - area.top >= 4)
@@ -140,69 +178,126 @@ void AGOSEngine::updateSecondScreenLayout() {
 		else
 			boxesTop = area.top;
 
-		// Split the verbs from the inventory in the empty columns closest to
-		// the middle, or between two touching boxes if there are none
-		int split = -1;
-		for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
-			if (!used[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
-				split = x;
-		}
-		if (split >= 0) {
-			int left = split, right = split;
-			while (left > 0 && !used[left - 1])
-				left--;
-			while (right < _screenWidth && !used[right])
-				right++;
-			split = (left + right) / 2;
-		} else {
-			for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
-				if (!straddled[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
-					split = x;
+		// Simon 2 has verbs on both sides of the inventory: put both groups
+		// of verbs in one row, and the inventory below them
+		int leftEnd = -1, rightStart = -1;
+		if (!inventory.isEmpty()) {
+			for (uint i = 0; i < boxes.size(); i++) {
+				const Common::Rect &r = boxes[i];
+				if (r.right <= inventory.left)
+					leftEnd = MAX<int>(leftEnd, r.right);
+				else if (r.left >= inventory.right)
+					rightStart = (rightStart < 0) ? r.left : MIN<int>(rightStart, r.left);
 			}
 		}
 
-		if (split > 0) {
-			panels.push_back(Common::Rect(0, boxesTop, split, area.bottom));
-			panels.push_back(Common::Rect(split, boxesTop, _screenWidth, area.bottom));
+		if (leftEnd > 0 && rightStart > 0) {
+			const int invLeft = (leftEnd + inventory.left) / 2;
+			const int invRight = (inventory.right + rightStart) / 2;
+			panels.push_back(Common::Rect(0, boxesTop, invLeft, area.bottom));
+			panels.push_back(Common::Rect(invRight, boxesTop, _screenWidth, area.bottom));
+			beside.resize(panels.size());
+			beside.back() = true;
+			panels.push_back(Common::Rect(invLeft, boxesTop, invRight, area.bottom));
 		} else {
-			panels.push_back(Common::Rect(0, boxesTop, _screenWidth, area.bottom));
+			// Split the verbs from the inventory in the empty columns
+			// closest to the middle, or between two touching boxes if there
+			// are none
+			Common::Array<bool> used(_screenWidth, false);
+			Common::Array<bool> straddled(_screenWidth, false);
+			for (uint i = 0; i < boxes.size(); i++) {
+				const Common::Rect &r = boxes[i];
+				for (int x = r.left; x < r.right; x++) {
+					used[x] = true;
+					if (x > r.left)
+						straddled[x] = true;
+				}
+			}
+
+			int split = -1;
+			for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
+				if (!used[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
+					split = x;
+			}
+			if (split >= 0) {
+				int left = split, right = split;
+				while (left > 0 && !used[left - 1])
+					left--;
+				while (right < _screenWidth && !used[right])
+					right++;
+				split = (left + right) / 2;
+			} else {
+				for (int x = _screenWidth / 4; x < _screenWidth * 3 / 4; x++) {
+					if (!straddled[x] && (split < 0 || ABS(x - _screenWidth / 2) < ABS(split - _screenWidth / 2)))
+						split = x;
+				}
+			}
+
+			if (split > 0) {
+				panels.push_back(Common::Rect(0, boxesTop, split, area.bottom));
+				panels.push_back(Common::Rect(split, boxesTop, _screenWidth, area.bottom));
+			} else {
+				panels.push_back(Common::Rect(0, boxesTop, _screenWidth, area.bottom));
+			}
 		}
 	}
+	beside.resize(panels.size());
 
-	if (panels == _secondScreenPanels)
+	if (panels == _secondScreenPanels && beside == _secondScreenBeside)
 		return;
 	_secondScreenPanels = panels;
-	_system->setSecondScreenLayout(_secondScreenPanels);
+	_secondScreenBeside = beside;
+	_system->setSecondScreenLayout(_secondScreenPanels, _secondScreenBeside);
 }
 
 void AGOSEngine::focusNextBox(int dirX, int dirY) {
 	Common::Array<Common::Rect> boxes;
 	bool dialog = false;
-	if (!usesSecondScreen() || !getInterfaceBoxes(boxes, dialog) || boxes.empty())
+	Common::Rect inventory;
+	if (!usesSecondScreen() || !getInterfaceBoxes(boxes, dialog, inventory) || boxes.empty())
 		return;
+
+	// Where each panel goes on the second screen: rows stacked top to
+	// bottom, each from its left edge, with panels beside the previous one
+	// continuing its row
+	Common::Array<Common::Point> origins;
+	int rowTop = 0, rowHeight = 0, rowRight = 0;
+	for (uint j = 0; j < _secondScreenPanels.size(); j++) {
+		const Common::Rect &panel = _secondScreenPanels[j];
+		if (j > 0 && j < _secondScreenBeside.size() && _secondScreenBeside[j]) {
+			origins.push_back(Common::Point(rowRight + 8, rowTop));
+			rowRight += 8 + panel.width();
+			rowHeight = MAX<int>(rowHeight, panel.height());
+		} else {
+			rowTop += rowHeight;
+			origins.push_back(Common::Point(0, rowTop));
+			rowRight = panel.width();
+			rowHeight = panel.height();
+		}
+	}
 
 	struct Target {
 		Common::Rect rect;
 		Common::Point center;
 		Common::Point click;
+		int panel;
 	};
 	Common::Array<Target> targets;
 	for (uint i = 0; i < boxes.size(); i++) {
 		Common::Rect r = boxes[i];
 		const Common::Point click((r.left + r.right) / 2, (r.top + r.bottom) / 2);
 
-		// Move in the order the second screen shows the panels: stacked top
-		// to bottom, each from its left edge
-		int stackTop = 0;
+		// Move in the order the second screen shows the panels
+		int panelIndex = -1;
 		for (uint j = 0; j < _secondScreenPanels.size(); j++) {
 			const Common::Rect &panel = _secondScreenPanels[j];
 			if (panel.contains(click)) {
-				r.translate(-panel.left, stackTop - panel.top);
+				r.translate(origins[j].x - panel.left, origins[j].y - panel.top);
+				panelIndex = j;
 				break;
 			}
-			stackTop += panel.height();
 		}
-		Target t = { r, Common::Point((r.left + r.right) / 2, (r.top + r.bottom) / 2), click };
+		Target t = { r, Common::Point((r.left + r.right) / 2, (r.top + r.bottom) / 2), click, panelIndex };
 		targets.push_back(t);
 	}
 
@@ -224,30 +319,34 @@ void AGOSEngine::focusNextBox(int dirX, int dirY) {
 	} else {
 		// The nearest target in the pressed direction. Up and down prefer
 		// targets overlapping the current one sideways; left and right stay
-		// on the current row.
-		int bestScore = 0;
-		for (uint i = 0; i < targets.size(); i++) {
-			if (&targets[i] == from)
-				continue;
-			const Common::Rect &r = targets[i].rect;
-			const int dx = targets[i].center.x - from->center.x;
-			const int dy = targets[i].center.y - from->center.y;
-			const int along = dx * dirX + dy * dirY;
-			if (along <= 0)
-				continue;
-			int across;
-			if (dirY)
-				across = MAX(r.left - from->rect.right, from->rect.left - r.right);
-			else
-				across = MAX(r.top - from->rect.bottom, from->rect.top - r.bottom);
-			if (dirX && across >= 0)
-				continue;
-			across = (across < 0) ? 0 : across + 1;
-			const int score = along + 3 * across;
-			if (!best || score < bestScore) {
-				best = &targets[i];
-				bestScore = score;
+		// on the current row, or failing that in the current panel.
+		for (int pass = 0; pass < 2 && !best; pass++) {
+			int bestScore = 0;
+			for (uint i = 0; i < targets.size(); i++) {
+				if (&targets[i] == from)
+					continue;
+				const Common::Rect &r = targets[i].rect;
+				const int dx = targets[i].center.x - from->center.x;
+				const int dy = targets[i].center.y - from->center.y;
+				const int along = dx * dirX + dy * dirY;
+				if (along <= 0)
+					continue;
+				int across;
+				if (dirY)
+					across = MAX(r.left - from->rect.right, from->rect.left - r.right);
+				else
+					across = MAX(r.top - from->rect.bottom, from->rect.top - r.bottom);
+				if (dirX && across >= 0 && (pass == 0 || targets[i].panel != from->panel))
+					continue;
+				across = (across < 0) ? 0 : across + 1;
+				const int score = along + 3 * across;
+				if (!best || score < bestScore) {
+					best = &targets[i];
+					bestScore = score;
+				}
 			}
+			if (!dirX)
+				break;
 		}
 	}
 	if (!best)

@@ -610,9 +610,13 @@ protected:
 
 	// Second screen support, see secondscreen.cpp
 	Common::Array<Common::Rect> _secondScreenPanels;
+	Common::Array<bool> _secondScreenBeside;
+	Common::String _secondScreenBoxes;
+	bool _boxStarsRequested;
 	bool usesSecondScreen() const;
-	bool getInterfaceBoxes(Common::Array<Common::Rect> &boxes, bool &dialog) const;
+	bool getInterfaceBoxes(Common::Array<Common::Rect> &boxes, bool &dialog, Common::Rect &inventory) const;
 	void updateSecondScreenLayout();
+	void logInterfaceBoxes();
 	void focusNextBox(int dirX, int dirY);
 	HitArea *_hitAreaList;
 

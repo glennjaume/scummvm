@@ -208,8 +208,10 @@ void AGOSEngine::waitForInput() {
 			}
 
 			if ((getGameType() == GType_SIMON1 || getGameType() == GType_SIMON2) &&
-				_action == kActionShowObjects)
+				(_action == kActionShowObjects || _boxStarsRequested)) {
+				_boxStarsRequested = false;
 				displayBoxStars();
+			}
 			if (processSpecialKeys()) {
 				if (getGameId() != GID_DIMP)
 					goto out_of_here;

@@ -667,10 +667,11 @@ bool OSystem_Android::getFeatureState(Feature f) {
 	}
 }
 
-void OSystem_Android::setSecondScreenLayout(const Common::Array<Common::Rect> &panels) {
+void OSystem_Android::setSecondScreenLayout(const Common::Array<Common::Rect> &panels,
+                                             const Common::Array<bool> &besidePrevious) {
 	AndroidGraphicsManager *gfx = dynamic_cast<AndroidGraphicsManager *>(_graphicsManager);
 	if (gfx)
-		gfx->setSecondScreenLayout(panels);
+		gfx->setSecondScreenLayout(panels, besidePrevious);
 }
 
 void OSystem_Android::setPause(bool value) {

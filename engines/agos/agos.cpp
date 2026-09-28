@@ -358,6 +358,7 @@ AGOSEngine::AGOSEngine(OSystem *system, const AGOSGameDescription *gd)
 	_pendingDeleteTimeEvent = nullptr;
 
 	_action = kActionNone;
+	_boxStarsRequested = false;
 
 	_initMouse = 0;
 	_leftButtonDown = false;

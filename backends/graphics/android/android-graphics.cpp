@@ -183,13 +183,18 @@ bool AndroidGraphicsManager::isSecondScreenActive() const {
 		_gameScreen && _rotationMode == Common::kRotationNormal;
 }
 
-void AndroidGraphicsManager::setSecondScreenLayout(const Common::Array<Common::Rect> &panels) {
-	if (panels == _secondScreenPanels)
+void AndroidGraphicsManager::setSecondScreenLayout(const Common::Array<Common::Rect> &panels, const Common::Array<bool> &besidePrevious) {
+	Common::Array<bool> beside;
+	for (uint i = 0; i < panels.size(); i++)
+		beside.push_back(i > 0 && i < besidePrevious.size() && besidePrevious[i]);
+	if (panels == _secondScreenPanels && beside == _secondScreenBeside)
 		return;
 
 	_secondScreenPanels = panels;
+	_secondScreenBeside = beside;
 	for (uint i = 0; i < panels.size(); i++)
-		LOGD("second screen panel %u: (%d,%d)-(%d,%d)", i, panels[i].left, panels[i].top, panels[i].right, panels[i].bottom);
+		LOGD("second screen panel %u: (%d,%d)-(%d,%d)%s", i, panels[i].left, panels[i].top, panels[i].right, panels[i].bottom,
+		     beside[i] ? " beside the previous one" : "");
 
 	recalculateDisplayAreas();
 	recalculateCursorScaling();
@@ -226,8 +231,9 @@ void AndroidGraphicsManager::syncBottomScreen() {
 }
 
 // Stack the panels top to bottom on the second screen, as large as they fit.
-// Full width panels (e.g. the sentence line) are scaled to the screen width,
-// narrower ones (e.g. verbs and inventory side by side) share one larger scale.
+// Panels marked as beside the previous one share its row. Full width rows
+// (e.g. the sentence line) are scaled to the screen width, narrower ones
+// (e.g. verbs and inventory split apart) share one larger scale.
 void AndroidGraphicsManager::layoutBottomScreen() {
 	_bottomPanelRects.clear();
 	if (_secondScreenPanels.empty() || _bottomWidth <= 0 || _bottomHeight <= 0 || !_gameScreen)
@@ -240,31 +246,50 @@ void AndroidGraphicsManager::layoutBottomScreen() {
 	const float pixelAspect = (float)intToFrac(gameWidth) / gameHeight / getDesiredGameAspectRatio();
 
 	const float margin = 0.96f;
+	const int columnGap = _bottomWidth / 40;
+
+	struct Row {
+		uint first, last;
+		int width, height; // in game pixels
+		float scale;
+	};
+	Common::Array<Row> rows;
+	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
+		const Common::Rect &panel = _secondScreenPanels[i];
+		if (!rows.empty() && _secondScreenBeside[i]) {
+			Row &row = rows.back();
+			row.last = i;
+			row.width += panel.width();
+			row.height = MAX<int>(row.height, panel.height());
+		} else {
+			Row row = { i, i, panel.width(), panel.height(), 0.0f };
+			rows.push_back(row);
+		}
+	}
+
 	const float fullScale = margin * _bottomWidth / gameWidth;
 	float splitScale = 0.0f;
-	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
-		const int w = _secondScreenPanels[i].width();
-		if (w > 0 && w < gameWidth) {
-			const float s = margin * _bottomWidth / w;
+	for (uint i = 0; i < rows.size(); i++) {
+		if (rows[i].width > 0 && rows[i].width < gameWidth) {
+			const float s = (margin * _bottomWidth - columnGap * (rows[i].last - rows[i].first)) / rows[i].width;
 			splitScale = (splitScale == 0.0f) ? s : MIN(splitScale, s);
 		}
 	}
 
-	Common::Array<float> scales;
 	float totalHeight = 0.0f;
-	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
-		const float s = (_secondScreenPanels[i].width() < gameWidth) ? splitScale : fullScale;
-		scales.push_back(s);
-		totalHeight += _secondScreenPanels[i].height() * s * pixelAspect;
+	for (uint i = 0; i < rows.size(); i++) {
+		rows[i].scale = (rows[i].width < gameWidth) ? splitScale : fullScale;
+		totalHeight += rows[i].height * rows[i].scale * pixelAspect;
 	}
 
-	// Panels on the same rows are one line wrapped in two, so keep them close
+	// Rows showing the same game rows are one line wrapped in two, so keep
+	// them close
 	const int gap = _bottomHeight / 40;
 	Common::Array<int> gaps;
 	int totalGaps = 0;
-	for (uint i = 1; i < _secondScreenPanels.size(); i++) {
-		const Common::Rect &prev = _secondScreenPanels[i - 1];
-		const Common::Rect &panel = _secondScreenPanels[i];
+	for (uint i = 1; i < rows.size(); i++) {
+		const Common::Rect &prev = _secondScreenPanels[rows[i - 1].last];
+		const Common::Rect &panel = _secondScreenPanels[rows[i].first];
 		const bool continued = (panel.top == prev.top && panel.bottom == prev.bottom);
 		gaps.push_back(continued ? gap / 4 : gap);
 		totalGaps += gaps.back();
@@ -275,24 +300,31 @@ void AndroidGraphicsManager::layoutBottomScreen() {
 	int usedHeight = totalGaps;
 	int splitWidth = 0;
 	Common::Array<Common::Point> sizes;
-	for (uint i = 0; i < _secondScreenPanels.size(); i++) {
-		const Common::Rect &panel = _secondScreenPanels[i];
-		const int w = MAX(1, (int)(panel.width() * scales[i] * shrink));
-		const int h = MAX(1, (int)(panel.height() * scales[i] * shrink * pixelAspect));
-		sizes.push_back(Common::Point(w, h));
-		usedHeight += h;
-		if (panel.width() < gameWidth)
-			splitWidth = MAX(splitWidth, w);
+	for (uint i = 0; i < rows.size(); i++) {
+		int rowWidth = columnGap * (rows[i].last - rows[i].first);
+		for (uint j = rows[i].first; j <= rows[i].last; j++) {
+			const Common::Rect &panel = _secondScreenPanels[j];
+			const int w = MAX(1, (int)(panel.width() * rows[i].scale * shrink));
+			const int h = MAX(1, (int)(panel.height() * rows[i].scale * shrink * pixelAspect));
+			sizes.push_back(Common::Point(w, h));
+			rowWidth += w;
+		}
+		usedHeight += (int)(rows[i].height * rows[i].scale * shrink * pixelAspect);
+		if (rows[i].width < gameWidth)
+			splitWidth = MAX(splitWidth, rowWidth);
 	}
 
-	// Narrower panels line up on their left edges, in a centered column
+	// Narrower rows line up on their left edges, in a centered column
 	const int splitLeft = (_bottomWidth - splitWidth) / 2;
 	int y = (_bottomHeight - usedHeight) / 2;
-	for (uint i = 0; i < sizes.size(); i++) {
-		const int x = (_secondScreenPanels[i].width() < gameWidth) ? splitLeft : (_bottomWidth - sizes[i].x) / 2;
-		_bottomPanelRects.push_back(Common::Rect(x, y, x + sizes[i].x, y + sizes[i].y));
+	for (uint i = 0; i < rows.size(); i++) {
+		int x = (rows[i].width < gameWidth) ? splitLeft : (_bottomWidth - sizes[rows[i].first].x) / 2;
+		for (uint j = rows[i].first; j <= rows[i].last; j++) {
+			_bottomPanelRects.push_back(Common::Rect(x, y, x + sizes[j].x, y + sizes[j].y));
+			x += sizes[j].x + columnGap;
+		}
 		if (i < gaps.size())
-			y += sizes[i].y + gaps[i];
+			y += (int)(rows[i].height * rows[i].scale * shrink * pixelAspect) + gaps[i];
 	}
 }
 

@@ -229,7 +229,8 @@ public:
 	void pushDelayedTouchMouseBtnEvents();
 	void pushBottomScreenTouch(int action, int x, int y);
 
-	void setSecondScreenLayout(const Common::Array<Common::Rect> &panels) override;
+	void setSecondScreenLayout(const Common::Array<Common::Rect> &panels,
+	                           const Common::Array<bool> &besidePrevious = Common::Array<bool>()) override;
 
 	TouchControls &getTouchControls() { return _touchControls; }
 	void applyTouchSettings(bool _3dMode, bool overlayShown);

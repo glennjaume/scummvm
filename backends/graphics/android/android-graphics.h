@@ -55,7 +55,7 @@ public:
 	void syncVirtkeyboardState(bool virtkeybd_on);
 	void applyTouchSettings() const;
 
-	void setSecondScreenLayout(const Common::Array<Common::Rect> &panels);
+	void setSecondScreenLayout(const Common::Array<Common::Rect> &panels, const Common::Array<bool> &besidePrevious);
 	/**
 	 * Map a touch on the second screen to window coordinates of the game.
 	 * @return false when the second screen is not in use
@@ -89,6 +89,7 @@ private:
 	// Panels of the game's interface shown on the second screen, in game
 	// coordinates, and where each is drawn on that screen
 	Common::Array<Common::Rect> _secondScreenPanels;
+	Common::Array<bool> _secondScreenBeside;
 	Common::Array<Common::Rect> _bottomPanelRects;
 	int _bottomScreenChangeId;
 	int _bottomWidth, _bottomHeight;
