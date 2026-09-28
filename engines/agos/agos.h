@@ -635,6 +635,8 @@ protected:
 	void logSprites();
 	void updateMainScreenFocus();
 	Common::Rect _mainScreenFocus;
+	Common::Rect _mainScreenTarget;
+	bool _mainScreenBlank;
 	Common::Rect _mainScreenShrinkTo;
 	uint32 _mainScreenShrinkSince;
 	Common::String _secondScreenSprites;

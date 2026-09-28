@@ -171,95 +171,123 @@ void AGOSEngine::logSprites() {
 void AGOSEngine::updateMainScreenFocus() {
 	// Intros and cutscenes often show a small picture on a black screen.
 	// Before the interface first appears, zoom the main screen to the
-	// picture: at once when something is drawn outside the part shown, and
-	// only after a while when the picture gets smaller.
+	// picture. Each scene starts from what it first shows, and the zoom only
+	// widens as more is drawn, e.g. credits, so it does not jump back and
+	// forth. It narrows again after a blank screen, or when the picture has
+	// stayed smaller for a while.
 	const Common::Rect full(_screenWidth, _screenHeight);
-	Common::Rect focus = _mainScreenFocus.isEmpty() ? full : _mainScreenFocus;
 	if (!_secondScreenPanels.empty() || !_mouseHideCount) {
-		focus = full;
-	} else {
-		Common::Rect content;
-		const Graphics::Surface *screen = _system->lockScreen();
-		if (screen && screen->w >= _screenWidth && screen->h >= _screenHeight) {
-			// The background is the color most of the border has
-			uint counts[256] = { 0 };
-			for (int x = 0; x < _screenWidth; x++) {
-				counts[*(const byte *)screen->getBasePtr(x, 0)]++;
-				counts[*(const byte *)screen->getBasePtr(x, _screenHeight - 1)]++;
-			}
-			for (int y = 0; y < _screenHeight; y++) {
-				counts[*(const byte *)screen->getBasePtr(0, y)]++;
-				counts[*(const byte *)screen->getBasePtr(_screenWidth - 1, y)]++;
-			}
-			byte background = 0;
-			for (int c = 1; c < 256; c++) {
-				if (counts[c] > counts[background])
-					background = c;
-			}
-			if (counts[background] * 10 >= (uint)(_screenWidth + _screenHeight) * 2 * 9) {
-				for (int y = 0; y < _screenHeight; y++) {
-					const byte *row = (const byte *)screen->getBasePtr(0, y);
-					for (int x = 0; x < _screenWidth; x++) {
-						if (row[x] == background)
-							continue;
-						if (content.isEmpty())
-							content = Common::Rect(x, y, x + 1, y + 1);
-						else
-							content.extend(Common::Rect(x, y, x + 1, y + 1));
-					}
-				}
-			} else {
-				content = full;
-			}
+		_mainScreenTarget = full;
+		_mainScreenBlank = true;
+		_mainScreenShrinkTo = Common::Rect();
+		if (!_mainScreenFocus.isEmpty()) {
+			_mainScreenFocus = Common::Rect();
+			_system->setMainScreenFocus(_mainScreenFocus);
 		}
-		_system->unlockScreen();
+		return;
+	}
 
-		// Between scenes the screen is blank: keep the zoom
-		if (!content.isEmpty()) {
-			// Leave a margin, and zoom in at most twice
-			content.grow(4);
-			const int minWidth = _screenWidth / 2, minHeight = _screenHeight / 2;
-			if (content.width() < minWidth) {
-				const int more = minWidth - content.width();
-				content.left -= more / 2;
-				content.right += more - more / 2;
-			}
-			if (content.height() < minHeight) {
-				const int more = minHeight - content.height();
-				content.top -= more / 2;
-				content.bottom += more - more / 2;
-			}
-			// Slide back onto the screen, then cut what is still off it
-			if (content.left < 0)
-				content.translate(-content.left, 0);
-			if (content.right > full.right)
-				content.translate(full.right - content.right, 0);
-			if (content.top < 0)
-				content.translate(0, -content.top);
-			if (content.bottom > full.bottom)
-				content.translate(0, full.bottom - content.bottom);
-			content.clip(full);
-
-			const uint32 now = _system->getMillis();
-			if (!focus.contains(content)) {
-				focus.extend(content);
-				_mainScreenShrinkTo = Common::Rect();
-			} else if (content.width() * content.height() * 10 < focus.width() * focus.height() * 7) {
-				if (_mainScreenShrinkTo.isEmpty()) {
-					_mainScreenShrinkTo = content;
-					_mainScreenShrinkSince = now;
-				} else {
-					_mainScreenShrinkTo.extend(content);
+	Common::Rect content;
+	const Graphics::Surface *screen = _system->lockScreen();
+	if (screen && screen->w >= _screenWidth && screen->h >= _screenHeight) {
+		// The background is the color most of the border has
+		uint counts[256] = { 0 };
+		for (int x = 0; x < _screenWidth; x++) {
+			counts[*(const byte *)screen->getBasePtr(x, 0)]++;
+			counts[*(const byte *)screen->getBasePtr(x, _screenHeight - 1)]++;
+		}
+		for (int y = 0; y < _screenHeight; y++) {
+			counts[*(const byte *)screen->getBasePtr(0, y)]++;
+			counts[*(const byte *)screen->getBasePtr(_screenWidth - 1, y)]++;
+		}
+		byte background = 0;
+		for (int c = 1; c < 256; c++) {
+			if (counts[c] > counts[background])
+				background = c;
+		}
+		if (counts[background] * 2 >= (uint)(_screenWidth + _screenHeight) * 2) {
+			for (int y = 0; y < _screenHeight; y++) {
+				const byte *row = (const byte *)screen->getBasePtr(0, y);
+				for (int x = 0; x < _screenWidth; x++) {
+					if (row[x] == background)
+						continue;
+					if (content.isEmpty())
+						content = Common::Rect(x, y, x + 1, y + 1);
+					else
+						content.extend(Common::Rect(x, y, x + 1, y + 1));
 				}
-				if (now - _mainScreenShrinkSince >= 1000) {
-					focus = _mainScreenShrinkTo;
-					_mainScreenShrinkTo = Common::Rect();
-				}
-			} else {
-				_mainScreenShrinkTo = Common::Rect();
 			}
+		} else {
+			content = full;
 		}
 	}
+	_system->unlockScreen();
+
+	if (content.isEmpty()) {
+		// Between scenes the screen is blank: keep the zoom until the next
+		// scene shows something
+		_mainScreenBlank = true;
+	} else {
+		// Leave a margin, and zoom in at most twice
+		content.grow(4);
+		const int minWidth = _screenWidth / 2, minHeight = _screenHeight / 2;
+		if (content.width() < minWidth) {
+			const int more = minWidth - content.width();
+			content.left -= more / 2;
+			content.right += more - more / 2;
+		}
+		if (content.height() < minHeight) {
+			const int more = minHeight - content.height();
+			content.top -= more / 2;
+			content.bottom += more - more / 2;
+		}
+		// Slide back onto the screen, then cut what is still off it
+		if (content.left < 0)
+			content.translate(-content.left, 0);
+		if (content.right > full.right)
+			content.translate(full.right - content.right, 0);
+		if (content.top < 0)
+			content.translate(0, -content.top);
+		if (content.bottom > full.bottom)
+			content.translate(0, full.bottom - content.bottom);
+		content.clip(full);
+
+		const uint32 now = _system->getMillis();
+		if (_mainScreenBlank || _mainScreenTarget.isEmpty()) {
+			_mainScreenTarget = content;
+			_mainScreenShrinkTo = Common::Rect();
+		} else if (!_mainScreenTarget.contains(content)) {
+			_mainScreenTarget.extend(content);
+			_mainScreenShrinkTo = Common::Rect();
+		} else if (content.width() * content.height() * 10 < _mainScreenTarget.width() * _mainScreenTarget.height() * 7) {
+			if (_mainScreenShrinkTo.isEmpty()) {
+				_mainScreenShrinkTo = content;
+				_mainScreenShrinkSince = now;
+			} else {
+				_mainScreenShrinkTo.extend(content);
+			}
+			if (now - _mainScreenShrinkSince >= 5000) {
+				_mainScreenTarget = _mainScreenShrinkTo;
+				_mainScreenShrinkTo = Common::Rect();
+			}
+		} else {
+			_mainScreenShrinkTo = Common::Rect();
+		}
+		_mainScreenBlank = false;
+	}
+
+	// Glide to the new zoom rather than jumping
+	Common::Rect focus = _mainScreenFocus.isEmpty() ? full : _mainScreenFocus;
+	const Common::Rect &target = _mainScreenTarget.isEmpty() ? full : _mainScreenTarget;
+	auto glide = [](int16 &from, int16 to) {
+		const int diff = to - from;
+		if (diff)
+			from += (diff > 0) ? MAX(1, diff / 4) : MIN(-1, diff / 4);
+	};
+	glide(focus.left, target.left);
+	glide(focus.top, target.top);
+	glide(focus.right, target.right);
+	glide(focus.bottom, target.bottom);
 
 	if (focus == full)
 		focus = Common::Rect();
@@ -618,7 +646,8 @@ static HitArea *findRoomBox(HitArea *hitAreas, uint count, int x, int y, bool fl
 	HitArea *best = nullptr;
 	for (uint i = 0; i < count; i++) {
 		HitArea *ha = &hitAreas[i];
-		if (!(ha->flags & kBFBoxInUse) || (ha->flags & kBFBoxDead) || ha->id == 0 ||
+		// The floor is often box 0
+		if (!(ha->flags & kBFBoxInUse) || (ha->flags & kBFBoxDead) ||
 		    x < ha->x || y < ha->y || x >= ha->x + ha->width || y >= ha->y + ha->height)
 			continue;
 		// The floor is the box behind everything else; otherwise take the
@@ -636,12 +665,31 @@ bool AGOSEngine::updateStickWalk() {
 	const int deadZone = 8000;
 	const bool held = ABS(_walkStickX) > deadZone || ABS(_walkStickY) > deadZone;
 
+	// While testing, log why the stick does or doesn't walk, when that changes
+	static Common::String lastState;
+	auto logState = [&](const char *state) {
+		if (lastState != state) {
+			lastState = state;
+			debug("AGOS stick walk: %s (stick %d,%d)", state, _walkStickX, _walkStickY);
+		}
+	};
+
 	Common::Point pos;
-	if ((getGameType() != GType_SIMON1 && getGameType() != GType_SIMON2) || _mouseHideCount ||
-	    (getGameType() == GType_SIMON2 && getBitFlag(79)) || !findPlayer(pos)) {
+	if (getGameType() != GType_SIMON1 && getGameType() != GType_SIMON2)
+		return false;
+	if (_mouseHideCount || (getGameType() == GType_SIMON2 && getBitFlag(79))) {
+		if (held)
+			logState("not now");
 		_stickWalking = false;
 		return false;
 	}
+	if (!findPlayer(pos)) {
+		if (held)
+			logState("Simon not found");
+		_stickWalking = false;
+		return false;
+	}
+	logState(held ? "held" : "released");
 
 	// Leave Simon where he is during conversations
 	Common::Array<Common::Rect> boxes;
@@ -701,8 +749,10 @@ bool AGOSEngine::updateStickWalk() {
 	target.y = CLIP<int>(target.y, 0, kInterfaceTop - 1);
 	if (!box)
 		box = findRoomBox(_hitAreas, ARRAYSIZE(_hitAreas), target.x + scroll, target.y, true);
-	if (!box)
+	if (!box) {
+		logState("no floor box");
 		return false;
+	}
 
 	// Walk, whatever verb the pointer would pick where it is now
 	HitArea *walk = findBox(101);
