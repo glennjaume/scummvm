@@ -79,7 +79,7 @@ jobs:
         run: |
           export CXXFLAGS="-I$ANDROID_LIBS/include" LDFLAGS="-L$ANDROID_LIBS/lib"
           ./configure --host=android-$ABI \
-            --disable-all-engines --enable-engine=scumm,agos \
+            --disable-all-engines --enable-engine=scumm,scumm_7_8,agos \
             --with-ogg-prefix="$ANDROID_LIBS" --with-vorbis-prefix="$ANDROID_LIBS" \
             --with-flac-prefix="$ANDROID_LIBS" --enable-flac \
             --disable-debug
