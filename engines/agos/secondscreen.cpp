@@ -689,12 +689,14 @@ bool AGOSEngine::updateStickWalk() {
 	Common::Point target;
 	HitArea *box = nullptr;
 	if (!held) {
-		// Stop just ahead, rather than at the last target
+		// Stop a little ahead, rather than at the last target. Not closer:
+		// where Simon is comes from his sprites and is only roughly where
+		// his feet are, and a target behind him turns him around.
 		_stickClickedExit = false;
 		if (!_stickWalking)
 			return false;
 		_stickWalking = false;
-		target = pos + Common::Point(_stickWalkStep.x / 8, _stickWalkStep.y / 8);
+		target = pos + Common::Point(_stickWalkStep.x / 2, _stickWalkStep.y / 2);
 	} else {
 		const float length = sqrtf((float)_walkStickX * _walkStickX + (float)_walkStickY * _walkStickY);
 		const int lookAhead = 32;
