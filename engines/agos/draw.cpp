@@ -534,7 +534,6 @@ void AGOSEngine::displayBoxStars() {
 		color = 225;
 
 	uint curHeight = (getGameType() == GType_SIMON2) ? _boxStarHeight : 134;
-	debug("AGOS box stars: height %u, scroll %d", curHeight, _scrollX);
 
 
 	for (int i = 0; i < 5; i++) {
@@ -542,6 +541,7 @@ void AGOSEngine::displayBoxStars() {
 		count = ARRAYSIZE(_hitAreas);
 
 		Graphics::Surface *screen = getBackendSurface();
+		uint stars = 0;
 
 		do {
 			if (ha->id != 0 && ha->flags & kBFBoxInUse && !(ha->flags & kBFBoxDead)) {
@@ -570,6 +570,7 @@ void AGOSEngine::displayBoxStars() {
 				if (x_ >= 311)
 					continue;
 
+				stars++;
 				dst = (byte *)screen->getPixels();
 
 				dst += (((screen->pitch / 4) * y_) * 4) + x_;
@@ -610,6 +611,8 @@ void AGOSEngine::displayBoxStars() {
 		} while (ha++, --count);
 
 		updateBackendSurface();
+		if (i == 0)
+			debug("AGOS box stars: %u drawn, height %u, scroll %d", stars, curHeight, _scrollX);
 
 		delay(100);
 

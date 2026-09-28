@@ -319,29 +319,34 @@ void AGOSEngine::updateSecondScreenLayout() {
 int AGOSEngine::findTextEnd(const Common::Rect &box) {
 	// The right edge of what is drawn in the box: the last column with a
 	// pixel other than the most common color, which is the background
-	const Graphics::Surface *screen = getBackendSurface();
-	if (!screen || box.right > screen->w || box.bottom > screen->h)
+	const Graphics::Surface *screen = _system->lockScreen();
+	if (!screen)
 		return -1;
-
-	uint counts[256] = { 0 };
-	for (int y = box.top; y < box.bottom; y++) {
-		const byte *row = (const byte *)screen->getBasePtr(box.left, y);
-		for (int x = 0; x < box.width(); x++)
-			counts[row[x]]++;
-	}
-	byte background = 0;
-	for (int c = 1; c < 256; c++) {
-		if (counts[c] > counts[background])
-			background = c;
-	}
-
-	for (int x = box.right - 1; x >= box.left; x--) {
+	int end = -1;
+	if (box.right <= screen->w && box.bottom <= screen->h) {
+		uint counts[256] = { 0 };
 		for (int y = box.top; y < box.bottom; y++) {
-			if (*(const byte *)screen->getBasePtr(x, y) != background)
-				return x + 1;
+			const byte *row = (const byte *)screen->getBasePtr(box.left, y);
+			for (int x = 0; x < box.width(); x++)
+				counts[row[x]]++;
+		}
+		byte background = 0;
+		for (int c = 1; c < 256; c++) {
+			if (counts[c] > counts[background])
+				background = c;
+		}
+
+		for (int x = box.right - 1; x >= box.left && end < 0; x--) {
+			for (int y = box.top; y < box.bottom; y++) {
+				if (*(const byte *)screen->getBasePtr(x, y) != background) {
+					end = x + 1;
+					break;
+				}
+			}
 		}
 	}
-	return -1;
+	_system->unlockScreen();
+	return end;
 }
 
 void AGOSEngine::focusNextBox(int dirX, int dirY) {
@@ -441,7 +446,10 @@ void AGOSEngine::focusNextBox(int dirX, int dirY) {
 				if (dirX && across >= 0 && (pass == 0 || targets[i].panel != from->panel))
 					continue;
 				across = (across < 0) ? 0 : across + 1;
-				const int score = along + 3 * across;
+				// Among targets in line, prefer the one most nearly
+				// straight ahead
+				const int offset = dirY ? ABS(dx) : ABS(dy);
+				const int score = along + 3 * across + offset / 4;
 				if (!best || score < bestScore) {
 					best = &targets[i];
 					bestScore = score;
@@ -453,6 +461,18 @@ void AGOSEngine::focusNextBox(int dirX, int dirY) {
 	}
 	if (!best)
 		return;
+
+	// Moving up or down into another panel, e.g. from the verbs to the
+	// inventory, start from the left of its nearest row
+	if (from && dirY && best->panel != from->panel) {
+		const Target *row = best;
+		for (uint i = 0; i < targets.size(); i++) {
+			const Target &t = targets[i];
+			if (t.panel == row->panel && t.center.y >= row->rect.top && t.center.y < row->rect.bottom &&
+			    t.center.x < best->center.x)
+				best = &t;
+		}
+	}
 
 	// The engine reads the pointer from the event manager, so tell it too
 	_system->warpMouse(best->click.x, best->click.y);
