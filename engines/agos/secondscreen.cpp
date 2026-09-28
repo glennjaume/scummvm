@@ -151,23 +151,6 @@ void AGOSEngine::logInterfaceBoxes() {
 	}
 }
 
-void AGOSEngine::logSprites() {
-	// Log where the sprites are as they move, to find the player's sprite
-	// for walking with the stick
-	const uint32 now = _system->getMillis();
-	if (now - _secondScreenSpritesTime < 300)
-		return;
-	Common::String dump;
-	for (const VgaSprite *vsp = _vgaSprites; vsp < _vgaSprites + ARRAYSIZE(_vgaSprites) && vsp->id != 0; vsp++)
-		dump += Common::String::format(" %d/%d:%d@%d,%d", vsp->id, vsp->zoneNum, vsp->image, vsp->x, vsp->y);
-	dump += Common::String::format(" scroll %d mouse %d,%d", _scrollX, _mouse.x, _mouse.y);
-	if (dump != _secondScreenSprites) {
-		_secondScreenSprites = dump;
-		_secondScreenSpritesTime = now;
-		debug("AGOS sprites:%s", dump.c_str());
-	}
-}
-
 void AGOSEngine::updateMainScreenFocus() {
 	// Intros and cutscenes often show a small picture on a black screen.
 	// Before the interface first appears, zoom the main screen to the
@@ -266,7 +249,7 @@ void AGOSEngine::updateMainScreenFocus() {
 			} else {
 				_mainScreenShrinkTo.extend(content);
 			}
-			if (now - _mainScreenShrinkSince >= 5000) {
+			if (now - _mainScreenShrinkSince >= 3000) {
 				_mainScreenTarget = _mainScreenShrinkTo;
 				_mainScreenShrinkTo = Common::Rect();
 			}
@@ -276,18 +259,23 @@ void AGOSEngine::updateMainScreenFocus() {
 		_mainScreenBlank = false;
 	}
 
-	// Glide to the new zoom rather than jumping
+	// Widen at once, so nothing new is cut off, but glide in rather than
+	// jumping
 	Common::Rect focus = _mainScreenFocus.isEmpty() ? full : _mainScreenFocus;
 	const Common::Rect &target = _mainScreenTarget.isEmpty() ? full : _mainScreenTarget;
-	auto glide = [](int16 &from, int16 to) {
-		const int diff = to - from;
-		if (diff)
-			from += (diff > 0) ? MAX(1, diff / 4) : MIN(-1, diff / 4);
-	};
-	glide(focus.left, target.left);
-	glide(focus.top, target.top);
-	glide(focus.right, target.right);
-	glide(focus.bottom, target.bottom);
+	if (!focus.contains(target)) {
+		focus.extend(target);
+	} else {
+		auto glide = [](int16 &from, int16 to) {
+			const int diff = to - from;
+			if (diff)
+				from += (diff > 0) ? MAX(1, diff / 4) : MIN(-1, diff / 4);
+		};
+		glide(focus.left, target.left);
+		glide(focus.top, target.top);
+		glide(focus.right, target.right);
+		glide(focus.bottom, target.bottom);
+	}
 
 	if (focus == full)
 		focus = Common::Rect();
@@ -308,7 +296,6 @@ void AGOSEngine::updateSecondScreenLayout() {
 	}
 
 	logInterfaceBoxes();
-	logSprites();
 	updateMainScreenFocus();
 
 	const Common::Rect area(0, kInterfaceTop, _screenWidth, _screenHeight);
@@ -762,7 +749,6 @@ bool AGOSEngine::updateStickWalk() {
 	setVerb(walk);
 	_defaultVerb = 101;
 
-	debug("AGOS stick walk: from %d,%d to %d,%d box %d", pos.x, pos.y, target.x, target.y, box->id);
 	_lastHitArea = box;
 	_lastHitArea3 = box;
 	_variableArray[1] = target.x;

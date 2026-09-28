@@ -611,17 +611,8 @@ void AGOSEngine::displayBoxStars() {
 		} while (ha++, --count);
 
 		updateBackendSurface();
-		if (i == 0) {
-			debug("AGOS box stars: %u drawn, height %u, scroll %d", stars, curHeight, _scrollX);
-			Common::String dump;
-			for (uint j = 0; j < ARRAYSIZE(_hitAreas); j++) {
-				const HitArea &b = _hitAreas[j];
-				if ((b.flags & kBFBoxInUse) && b.y < curHeight)
-					dump += Common::String::format(" %d:(%d,%d,%dx%d)%x%s", b.id, b.x, b.y, b.width, b.height, b.flags,
-					                               b.itemPtr ? "i" : "");
-			}
-			debug("AGOS box stars: room boxes%s", dump.c_str());
-		}
+		if (i == 0)
+			debug("AGOS box stars: %u drawn", stars);
 
 		delay(100);
 

@@ -632,15 +632,12 @@ protected:
 	int findTextEnd(const Common::Rect &box);
 	void updateSecondScreenLayout();
 	void logInterfaceBoxes();
-	void logSprites();
 	void updateMainScreenFocus();
 	Common::Rect _mainScreenFocus;
 	Common::Rect _mainScreenTarget;
 	bool _mainScreenBlank;
 	Common::Rect _mainScreenShrinkTo;
 	uint32 _mainScreenShrinkSince;
-	Common::String _secondScreenSprites;
-	uint32 _secondScreenSpritesTime;
 	void focusNextBox(int dirX, int dirY);
 
 	// Walking the player's character with a stick, see secondscreen.cpp

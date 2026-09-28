@@ -360,7 +360,6 @@ AGOSEngine::AGOSEngine(OSystem *system, const AGOSGameDescription *gd)
 	_action = kActionNone;
 	_boxStarsRequested = false;
 	_secondScreenDialog = false;
-	_secondScreenSpritesTime = 0;
 	_mainScreenShrinkSince = 0;
 	_mainScreenBlank = true;
 	_walkStickX = _walkStickY = 0;
