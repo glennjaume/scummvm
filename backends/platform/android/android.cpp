@@ -674,6 +674,12 @@ void OSystem_Android::setSecondScreenLayout(const Common::Array<Common::Rect> &p
 		gfx->setSecondScreenLayout(panels, besidePrevious);
 }
 
+void OSystem_Android::setMainScreenFocus(const Common::Rect &area) {
+	AndroidGraphicsManager *gfx = dynamic_cast<AndroidGraphicsManager *>(_graphicsManager);
+	if (gfx)
+		gfx->setMainScreenFocus(area);
+}
+
 void OSystem_Android::setPause(bool value) {
 	if (g_engine) {
 		LOGD("pauseEngine: %d", value);

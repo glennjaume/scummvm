@@ -168,6 +168,107 @@ void AGOSEngine::logSprites() {
 	}
 }
 
+void AGOSEngine::updateMainScreenFocus() {
+	// Intros and cutscenes often show a small picture on a black screen.
+	// Before the interface first appears, zoom the main screen to the
+	// picture: at once when something is drawn outside the part shown, and
+	// only after a while when the picture gets smaller.
+	const Common::Rect full(_screenWidth, _screenHeight);
+	Common::Rect focus = _mainScreenFocus.isEmpty() ? full : _mainScreenFocus;
+	if (!_secondScreenPanels.empty() || !_mouseHideCount) {
+		focus = full;
+	} else {
+		Common::Rect content;
+		const Graphics::Surface *screen = _system->lockScreen();
+		if (screen && screen->w >= _screenWidth && screen->h >= _screenHeight) {
+			// The background is the color most of the border has
+			uint counts[256] = { 0 };
+			for (int x = 0; x < _screenWidth; x++) {
+				counts[*(const byte *)screen->getBasePtr(x, 0)]++;
+				counts[*(const byte *)screen->getBasePtr(x, _screenHeight - 1)]++;
+			}
+			for (int y = 0; y < _screenHeight; y++) {
+				counts[*(const byte *)screen->getBasePtr(0, y)]++;
+				counts[*(const byte *)screen->getBasePtr(_screenWidth - 1, y)]++;
+			}
+			byte background = 0;
+			for (int c = 1; c < 256; c++) {
+				if (counts[c] > counts[background])
+					background = c;
+			}
+			if (counts[background] * 10 >= (uint)(_screenWidth + _screenHeight) * 2 * 9) {
+				for (int y = 0; y < _screenHeight; y++) {
+					const byte *row = (const byte *)screen->getBasePtr(0, y);
+					for (int x = 0; x < _screenWidth; x++) {
+						if (row[x] == background)
+							continue;
+						if (content.isEmpty())
+							content = Common::Rect(x, y, x + 1, y + 1);
+						else
+							content.extend(Common::Rect(x, y, x + 1, y + 1));
+					}
+				}
+			} else {
+				content = full;
+			}
+		}
+		_system->unlockScreen();
+
+		// Between scenes the screen is blank: keep the zoom
+		if (!content.isEmpty()) {
+			// Leave a margin, and zoom in at most twice
+			content.grow(4);
+			const int minWidth = _screenWidth / 2, minHeight = _screenHeight / 2;
+			if (content.width() < minWidth) {
+				const int more = minWidth - content.width();
+				content.left -= more / 2;
+				content.right += more - more / 2;
+			}
+			if (content.height() < minHeight) {
+				const int more = minHeight - content.height();
+				content.top -= more / 2;
+				content.bottom += more - more / 2;
+			}
+			// Slide back onto the screen, then cut what is still off it
+			if (content.left < 0)
+				content.translate(-content.left, 0);
+			if (content.right > full.right)
+				content.translate(full.right - content.right, 0);
+			if (content.top < 0)
+				content.translate(0, -content.top);
+			if (content.bottom > full.bottom)
+				content.translate(0, full.bottom - content.bottom);
+			content.clip(full);
+
+			const uint32 now = _system->getMillis();
+			if (!focus.contains(content)) {
+				focus.extend(content);
+				_mainScreenShrinkTo = Common::Rect();
+			} else if (content.width() * content.height() * 10 < focus.width() * focus.height() * 7) {
+				if (_mainScreenShrinkTo.isEmpty()) {
+					_mainScreenShrinkTo = content;
+					_mainScreenShrinkSince = now;
+				} else {
+					_mainScreenShrinkTo.extend(content);
+				}
+				if (now - _mainScreenShrinkSince >= 1000) {
+					focus = _mainScreenShrinkTo;
+					_mainScreenShrinkTo = Common::Rect();
+				}
+			} else {
+				_mainScreenShrinkTo = Common::Rect();
+			}
+		}
+	}
+
+	if (focus == full)
+		focus = Common::Rect();
+	if (focus != _mainScreenFocus) {
+		_mainScreenFocus = focus;
+		_system->setMainScreenFocus(_mainScreenFocus);
+	}
+}
+
 void AGOSEngine::updateSecondScreenLayout() {
 	if (!usesSecondScreen()) {
 		if (!_secondScreenPanels.empty()) {
@@ -180,6 +281,7 @@ void AGOSEngine::updateSecondScreenLayout() {
 
 	logInterfaceBoxes();
 	logSprites();
+	updateMainScreenFocus();
 
 	const Common::Rect area(0, kInterfaceTop, _screenWidth, _screenHeight);
 	Common::Array<Common::Rect> boxes, verbs;
@@ -610,7 +712,7 @@ bool AGOSEngine::updateStickWalk() {
 	setVerb(walk);
 	_defaultVerb = 101;
 
-	debug(1, "AGOS stick walk: from %d,%d to %d,%d box %d", pos.x, pos.y, target.x, target.y, box->id);
+	debug("AGOS stick walk: from %d,%d to %d,%d box %d", pos.x, pos.y, target.x, target.y, box->id);
 	_lastHitArea = box;
 	_lastHitArea3 = box;
 	_variableArray[1] = target.x;

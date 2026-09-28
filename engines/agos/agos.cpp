@@ -361,6 +361,7 @@ AGOSEngine::AGOSEngine(OSystem *system, const AGOSGameDescription *gd)
 	_boxStarsRequested = false;
 	_secondScreenDialog = false;
 	_secondScreenSpritesTime = 0;
+	_mainScreenShrinkSince = 0;
 	_walkStickX = _walkStickY = 0;
 	_stickWalking = false;
 	_lastStickWalk = 0;
@@ -1092,6 +1093,7 @@ const AGOSEngine::PnAmigaTextPlane *AGOSEngine::getPnAmigaTextPlane(const Window
 
 AGOSEngine::~AGOSEngine() {
 	_system->setSecondScreenLayout(Common::Array<Common::Rect>());
+	_system->setMainScreenFocus(Common::Rect());
 	_system->getAudioCDManager()->stop();
 	stopMusic();
 	delete _pnAmigaFont;

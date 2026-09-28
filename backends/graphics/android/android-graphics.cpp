@@ -201,6 +201,14 @@ void AndroidGraphicsManager::setSecondScreenLayout(const Common::Array<Common::R
 	_bottomNeedsRedraw = true;
 }
 
+void AndroidGraphicsManager::setMainScreenFocus(const Common::Rect &area) {
+	if (area == _mainScreenFocus)
+		return;
+	_mainScreenFocus = area;
+	LOGD("main screen focus: (%d,%d)-(%d,%d)", area.left, area.top, area.right, area.bottom);
+	recalculateDisplayAreas();
+}
+
 // Pick up a new, resized or lost second screen surface from the Java side
 void AndroidGraphicsManager::syncBottomScreen() {
 	if (_bottomScreenChangeId == JNI::bottom_screen_changeid)
@@ -525,29 +533,51 @@ int AndroidGraphicsManager::secondScreenTopRows() const {
 	return topHeight;
 }
 
-// Scale the game so the part above the second screen panels fills the main
-// screen. The rest of the game screen ends up below the window's bottom edge.
-void AndroidGraphicsManager::adjustGameDrawRect(Common::Rect &drawRect) const {
+// The part of the game screen the main screen shows: the rows above the
+// second screen panels, or the focus the game set while it has no panels.
+// Empty when the main screen shows the whole game screen.
+Common::Rect AndroidGraphicsManager::mainScreenFocus() const {
+	const int gameWidth = getWidth();
+	const int gameHeight = getHeight();
 	const int topHeight = secondScreenTopRows();
-	if (!topHeight)
+	if (topHeight)
+		return Common::Rect(0, 0, gameWidth, topHeight);
+
+	if (!_secondScreenPanels.empty() || _bottomWidth <= 0 || _bottomHeight <= 0 || !_gameScreen ||
+	    _rotationMode != Common::kRotationNormal)
+		return Common::Rect();
+	const Common::Rect focus = _mainScreenFocus.findIntersectingRect(Common::Rect(gameWidth, gameHeight));
+	if (focus.isEmpty() || (focus.width() == gameWidth && focus.height() == gameHeight))
+		return Common::Rect();
+	return focus;
+}
+
+// Scale the game so the part the main screen shows fills it. The rest of the
+// game screen ends up outside the window.
+void AndroidGraphicsManager::adjustGameDrawRect(Common::Rect &drawRect) const {
+	const Common::Rect focus = mainScreenFocus();
+	if (focus.isEmpty())
 		return;
 
+	const int gameWidth = getWidth();
 	const int gameHeight = getHeight();
 
 	// Aspect ratio of what stays on the main screen
-	const frac_t topAspect = getDesiredGameAspectRatio() * gameHeight / topHeight;
+	const frac_t focusAspect = getDesiredGameAspectRatio() * focus.width() / gameWidth * gameHeight / focus.height();
 
 	int width = _windowWidth;
-	int height = intToFrac(width) / topAspect;
+	int height = intToFrac(width) / focusAspect;
 	if (height > _windowHeight) {
 		height = _windowHeight;
-		width = fracToInt(height * topAspect);
+		width = fracToInt(height * focusAspect);
 	}
 
-	drawRect.left = (_windowWidth - width) / 2;
-	drawRect.right = drawRect.left + width;
-	drawRect.top = (_windowHeight - height) / 2;
-	drawRect.bottom = drawRect.top + height * gameHeight / topHeight;
+	const int left = (_windowWidth - width) / 2 - width * focus.left / focus.width();
+	const int top = (_windowHeight - height) / 2 - height * focus.top / focus.height();
+	drawRect.left = left;
+	drawRect.right = left + width * gameWidth / focus.width();
+	drawRect.top = top;
+	drawRect.bottom = top + height * gameHeight / focus.height();
 }
 
 void AndroidGraphicsManager::displayMessageOnOSD(const Common::U32String &msg) {
@@ -565,16 +595,19 @@ void AndroidGraphicsManager::recalculateDisplayAreas() {
 	layoutBottomScreen();
 	_bottomNeedsRedraw = true;
 
-	// The game draw rect reaches past the window's bottom edge, but when the
-	// window is taller than the room, the top rows of the interface would
-	// still show below it. Clip the game to the room.
-	const int topRows = secondScreenTopRows();
-	if (topRows > 0) {
-		const int visibleBottom = _gameDrawRect.top + _gameDrawRect.height() * topRows / getHeight();
-		_targetBuffer->setScissorBox(_gameDrawRect.left,
+	// The game draw rect reaches past the window's edges, but where the window
+	// has room around the part shown, e.g. the top rows of the interface
+	// below the room, the rest would still show. Clip the game to that part.
+	const Common::Rect focus = mainScreenFocus();
+	if (!focus.isEmpty()) {
+		const int visibleLeft = MAX<int>(0, _gameDrawRect.left + _gameDrawRect.width() * focus.left / getWidth());
+		const int visibleRight = MIN<int>(_windowWidth, _gameDrawRect.left + _gameDrawRect.width() * focus.right / getWidth());
+		const int visibleTop = MAX<int>(0, _gameDrawRect.top + _gameDrawRect.height() * focus.top / getHeight());
+		const int visibleBottom = MIN<int>(_windowHeight, _gameDrawRect.top + _gameDrawRect.height() * focus.bottom / getHeight());
+		_targetBuffer->setScissorBox(visibleLeft,
 		                             _windowHeight - visibleBottom,
-		                             _gameDrawRect.width(),
-		                             visibleBottom - _gameDrawRect.top);
+		                             visibleRight - visibleLeft,
+		                             visibleBottom - visibleTop);
 	}
 
 	int offsetX = _activeArea.drawRect.left - oldDrawRect.left;

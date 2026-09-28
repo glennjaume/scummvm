@@ -56,6 +56,7 @@ public:
 	void applyTouchSettings() const;
 
 	void setSecondScreenLayout(const Common::Array<Common::Rect> &panels, const Common::Array<bool> &besidePrevious);
+	void setMainScreenFocus(const Common::Rect &area);
 	/**
 	 * Map a touch on the second screen to window coordinates of the game.
 	 * @return false when the second screen is not in use
@@ -78,6 +79,7 @@ protected:
 private:
 	bool isSecondScreenActive() const;
 	int secondScreenTopRows() const;
+	Common::Rect mainScreenFocus() const;
 	void syncBottomScreen();
 	void layoutBottomScreen();
 	void drawBottomScreen();
@@ -90,6 +92,8 @@ private:
 	// coordinates, and where each is drawn on that screen
 	Common::Array<Common::Rect> _secondScreenPanels;
 	Common::Array<bool> _secondScreenBeside;
+	// Part of the game screen to zoom the main screen to, see setMainScreenFocus()
+	Common::Rect _mainScreenFocus;
 	Common::Array<Common::Rect> _bottomPanelRects;
 	int _bottomScreenChangeId;
 	int _bottomWidth, _bottomHeight;

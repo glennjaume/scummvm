@@ -231,6 +231,7 @@ public:
 
 	void setSecondScreenLayout(const Common::Array<Common::Rect> &panels,
 	                           const Common::Array<bool> &besidePrevious = Common::Array<bool>()) override;
+	void setMainScreenFocus(const Common::Rect &area) override;
 
 	TouchControls &getTouchControls() { return _touchControls; }
 	void applyTouchSettings(bool _3dMode, bool overlayShown);

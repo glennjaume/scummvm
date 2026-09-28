@@ -1388,6 +1388,17 @@ public:
 	                                   const Common::Array<bool> &besidePrevious = Common::Array<bool>()) {}
 
 	/**
+	 * Tell the backend which part of the game screen currently holds the
+	 * picture, e.g. a small scene on a black background in an intro.
+	 *
+	 * Backends with a second screen may zoom the main screen to this part
+	 * while no second screen layout is set. Other backends ignore this.
+	 *
+	 * @param area Part of the game screen, or an empty rect for all of it.
+	 */
+	virtual void setMainScreenFocus(const Common::Rect &area) {}
+
+	/**
 	 * Instruct the backend to capture a screenshot of the current screen.
 	 *
 	 * The backend can persist it the way it considers appropriate.

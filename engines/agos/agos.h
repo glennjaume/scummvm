@@ -633,6 +633,10 @@ protected:
 	void updateSecondScreenLayout();
 	void logInterfaceBoxes();
 	void logSprites();
+	void updateMainScreenFocus();
+	Common::Rect _mainScreenFocus;
+	Common::Rect _mainScreenShrinkTo;
+	uint32 _mainScreenShrinkSince;
 	Common::String _secondScreenSprites;
 	uint32 _secondScreenSpritesTime;
 	void focusNextBox(int dirX, int dirY);
