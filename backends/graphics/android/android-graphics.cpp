@@ -170,6 +170,11 @@ void AndroidGraphicsManager::updateScreen() {
 	if (bottomDirty && isSecondScreenActive()) {
 		drawBottomScreen();
 		_bottomNeedsRedraw = false;
+	} else if (_bottomNeedsRedraw && _bottomWidth > 0 && _gameScreen) {
+		// The game stopped using the second screen: blank it rather than
+		// leave the last interface there
+		drawBottomScreen();
+		_bottomNeedsRedraw = false;
 	}
 }
 
