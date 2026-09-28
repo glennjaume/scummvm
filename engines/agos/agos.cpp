@@ -360,6 +360,7 @@ AGOSEngine::AGOSEngine(OSystem *system, const AGOSGameDescription *gd)
 	_action = kActionNone;
 	_boxStarsRequested = false;
 	_secondScreenDialog = false;
+	_secondScreenSpritesTime = 0;
 
 	_initMouse = 0;
 	_leftButtonDown = false;

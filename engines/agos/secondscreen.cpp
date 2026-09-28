@@ -151,6 +151,23 @@ void AGOSEngine::logInterfaceBoxes() {
 	}
 }
 
+void AGOSEngine::logSprites() {
+	// Log where the sprites are as they move, to find the player's sprite
+	// for walking with the stick
+	const uint32 now = _system->getMillis();
+	if (now - _secondScreenSpritesTime < 300)
+		return;
+	Common::String dump;
+	for (const VgaSprite *vsp = _vgaSprites; vsp < _vgaSprites + ARRAYSIZE(_vgaSprites) && vsp->id != 0; vsp++)
+		dump += Common::String::format(" %d/%d:%d@%d,%d", vsp->id, vsp->zoneNum, vsp->image, vsp->x, vsp->y);
+	dump += Common::String::format(" scroll %d mouse %d,%d", _scrollX, _mouse.x, _mouse.y);
+	if (dump != _secondScreenSprites) {
+		_secondScreenSprites = dump;
+		_secondScreenSpritesTime = now;
+		debug("AGOS sprites:%s", dump.c_str());
+	}
+}
+
 void AGOSEngine::updateSecondScreenLayout() {
 	if (!usesSecondScreen()) {
 		if (!_secondScreenPanels.empty()) {
@@ -162,6 +179,7 @@ void AGOSEngine::updateSecondScreenLayout() {
 	}
 
 	logInterfaceBoxes();
+	logSprites();
 
 	const Common::Rect area(0, kInterfaceTop, _screenWidth, _screenHeight);
 	Common::Array<Common::Rect> boxes, verbs;

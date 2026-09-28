@@ -624,6 +624,9 @@ protected:
 	int findTextEnd(const Common::Rect &box);
 	void updateSecondScreenLayout();
 	void logInterfaceBoxes();
+	void logSprites();
+	Common::String _secondScreenSprites;
+	uint32 _secondScreenSpritesTime;
 	void focusNextBox(int dirX, int dirY);
 	HitArea *_hitAreaList;
 
