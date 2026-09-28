@@ -41,32 +41,50 @@ bool AGOSEngine::usesSecondScreen() const {
 }
 
 bool AGOSEngine::getInterfaceBoxes(Common::Array<Common::Rect> &boxes, bool &dialog) const {
-	// Simon 2 sometimes uses the whole screen for the room, and the save and
-	// load dialogs cover the whole screen too
+	// Simon 2 sometimes uses the whole screen for the room
 	if (getGameType() == GType_SIMON2 && const_cast<AGOSEngine *>(this)->getBitFlag(79))
 		return false;
 
 	const Common::Rect area(0, kInterfaceTop, _screenWidth, _screenHeight);
+	auto inArea = [&](const HitArea &ha) {
+		return Common::Rect(ha.x, ha.y, ha.x + ha.width, ha.y + ha.height).findIntersectingRect(area);
+	};
+
+	// The save and load dialog covers the whole screen. Its file slots are
+	// only enabled while it is open.
+	bool verbs = false;
 	dialog = false;
 	for (uint i = 0; i < ARRAYSIZE(_hitAreas); i++) {
 		const HitArea &ha = _hitAreas[i];
 		if (!(ha.flags & kBFBoxInUse) || (ha.flags & kBFBoxDead))
 			continue;
-		if (ha.id >= 200 && ha.id <= 213)
+		if (ha.id >= 208 && ha.id <= 213)
 			return false;
-		if ((ha.flags & kBFTextBox) && ha.itemPtr == _dummyItem2 && ha.verb == 208)
+		if (inArea(ha).isEmpty())
+			continue;
+		if (ha.id >= 101 && ha.id <= 112)
+			verbs = true;
+		if (ha.flags & kBFTextBox)
 			dialog = true;
 	}
 
+	// Without verbs or choices, the interface is not showing, e.g. in the
+	// intro, and there is nothing to lay out
+	if (!verbs && !dialog)
+		return true;
+
 	for (uint i = 0; i < ARRAYSIZE(_hitAreas); i++) {
 		const HitArea &ha = _hitAreas[i];
-		if (!(ha.flags & kBFBoxInUse) || (ha.flags & kBFBoxDead))
+		if (!(ha.flags & kBFBoxInUse) || (ha.flags & kBFBoxDead) || (ha.id >= 200 && ha.id <= 213))
 			continue;
 		// During conversations, only the choices can be picked
-		if (dialog && !((ha.flags & kBFTextBox) && ha.itemPtr == _dummyItem2))
+		if (dialog && !(ha.flags & kBFTextBox))
 			continue;
-		Common::Rect r(ha.x, ha.y, ha.x + ha.width, ha.y + ha.height);
-		r.clip(area);
+		const Common::Rect r = inArea(ha);
+		// Boxes spanning most of the interface, such as the sentence line,
+		// are neither verbs nor items
+		if (!dialog && r.width() >= _screenWidth * 3 / 4)
+			continue;
 		if (!r.isEmpty())
 			boxes.push_back(r);
 	}
