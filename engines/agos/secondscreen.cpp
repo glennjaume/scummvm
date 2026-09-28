@@ -696,11 +696,15 @@ bool AGOSEngine::updateStickWalk() {
 		if (!_stickWalking)
 			return false;
 		_stickWalking = false;
-		target = pos + Common::Point(_stickWalkStep.x / 2, _stickWalkStep.y / 2);
+		target = pos + Common::Point(_stickWalkStep.x / 8, _stickWalkStep.y / 8);
 	} else {
-		const float length = sqrtf((float)_walkStickX * _walkStickX + (float)_walkStickY * _walkStickY);
-		const int lookAhead = 32;
-		const Common::Point step((int)(lookAhead * _walkStickX / length), (int)(lookAhead * _walkStickY / length));
+		// Snap the stick to 8 directions, so small wobbles of the stick do
+		// not give Simon a new walk each time
+		const float angle = atan2f((float)_walkStickY, (float)_walkStickX);
+		const float snapped = roundf(angle / (float)(M_PI / 4)) * (float)(M_PI / 4);
+		const int lookAhead = 96;
+		const Common::Point step((int)roundf(lookAhead * cosf(snapped)), (int)roundf(lookAhead * sinf(snapped)));
+		const Common::Point probe(step.x / 4, step.y / 4);
 
 		// Exits are objects clicked rather than places walked to. When Simon
 		// is held against the edge of where he can walk, click whatever is
@@ -708,7 +712,7 @@ bool AGOSEngine::updateStickWalk() {
 		if (_stickWalking && pos == _stickBlockedPos) {
 			if (!_stickClickedExit && now - _stickBlockedSince >= 400) {
 				_stickClickedExit = true;
-				target = pos + step;
+				target = pos + probe;
 				box = findRoomBox(_hitAreas, ARRAYSIZE(_hitAreas), target.x, target.y, false);
 				if (box && box == findRoomBox(_hitAreas, ARRAYSIZE(_hitAreas), target.x, target.y, true))
 					box = nullptr;
@@ -722,13 +726,20 @@ bool AGOSEngine::updateStickWalk() {
 		}
 
 		if (!box) {
-			if (_stickWalking && now - _lastStickWalk < 300 &&
-			    ABS(step.x - _stickWalkStep.x) + ABS(step.y - _stickWalkStep.y) < lookAhead / 2)
+			// Walk far ahead in one go, which the game animates smoothly, and
+			// only walk again when the direction changes or Simon gets near
+			// the target. Every new walk makes him start his step again.
+			if (_stickWalking && step == _stickWalkStep &&
+			    (ABS(pos.x - _stickWalkTarget.x) > lookAhead / 3 || ABS(pos.y - _stickWalkTarget.y) > lookAhead / 3) &&
+			    now - _lastStickWalk < 2000)
+				return false;
+			if (_stickWalking && now - _lastStickWalk < 150)
 				return false;
 			_stickWalking = true;
 			_lastStickWalk = now;
 			_stickWalkStep = step;
 			target = pos + step;
+			_stickWalkTarget = target;
 		}
 	}
 

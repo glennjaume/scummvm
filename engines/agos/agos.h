@@ -645,6 +645,7 @@ protected:
 	bool _stickWalking;
 	uint32 _lastStickWalk;
 	Common::Point _stickWalkStep;
+	Common::Point _stickWalkTarget;
 	Common::Point _stickBlockedPos;
 	uint32 _stickBlockedSince;
 	bool _stickClickedExit;
