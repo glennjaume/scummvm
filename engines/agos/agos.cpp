@@ -361,6 +361,11 @@ AGOSEngine::AGOSEngine(OSystem *system, const AGOSGameDescription *gd)
 	_boxStarsRequested = false;
 	_secondScreenDialog = false;
 	_secondScreenSpritesTime = 0;
+	_walkStickX = _walkStickY = 0;
+	_stickWalking = false;
+	_lastStickWalk = 0;
+	_stickBlockedSince = 0;
+	_stickClickedExit = false;
 
 	_initMouse = 0;
 	_leftButtonDown = false;

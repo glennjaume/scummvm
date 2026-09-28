@@ -534,6 +534,30 @@ void AGOSEngine::delay(uint amount) {
 			case Common::EVENT_CUSTOM_ENGINE_ACTION_END:
 				_action = kActionNone;
 				break;
+			case Common::EVENT_CUSTOM_BACKEND_ACTION_AXIS:
+				// A released axis also resets the opposite direction, so
+				// ignore that while the stick is held the other way
+				switch (event.customType) {
+				case kAxisActionWalkUp:
+					if (event.joystick.position != 0 || _walkStickY <= 0)
+						_walkStickY = -event.joystick.position;
+					break;
+				case kAxisActionWalkDown:
+					if (event.joystick.position != 0 || _walkStickY >= 0)
+						_walkStickY = event.joystick.position;
+					break;
+				case kAxisActionWalkLeft:
+					if (event.joystick.position != 0 || _walkStickX <= 0)
+						_walkStickX = -event.joystick.position;
+					break;
+				case kAxisActionWalkRight:
+					if (event.joystick.position != 0 || _walkStickX >= 0)
+						_walkStickX = event.joystick.position;
+					break;
+				default:
+					break;
+				}
+				break;
 			case Common::EVENT_KEYDOWN:
 				if (event.kbd.keycode >= Common::KEYCODE_0 && event.kbd.keycode <= Common::KEYCODE_9
 					&& (event.kbd.hasFlags(Common::KBD_ALT) ||

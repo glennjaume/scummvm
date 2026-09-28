@@ -216,6 +216,8 @@ void AGOSEngine::waitForInput() {
 				if (getGameId() != GID_DIMP)
 					goto out_of_here;
 			}
+			if (_lastHitArea3 == nullptr && !_dragMode && updateStickWalk())
+				break;
 			if (_lastHitArea3 == (HitArea *) -1) {
 				_lastHitArea = nullptr;
 				_lastHitArea3 = nullptr;

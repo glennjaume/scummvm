@@ -293,6 +293,27 @@ Common::KeymapArray AgosMetaEngine::initKeymaps(const char *target) const {
 		act->addDefaultInputMapping("JOY_HAT_X+");
 		gameKeyMap->addAction(act);
 
+		// The left stick walks Simon; the right stick moves the pointer
+		act = new Action("WALKUP", _("Walk up"));
+		act->setCustomBackendActionAxisEvent(kAxisActionWalkUp);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_Y-");
+		gameKeyMap->addAction(act);
+
+		act = new Action("WALKDOWN", _("Walk down"));
+		act->setCustomBackendActionAxisEvent(kAxisActionWalkDown);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_Y+");
+		gameKeyMap->addAction(act);
+
+		act = new Action("WALKLEFT", _("Walk left"));
+		act->setCustomBackendActionAxisEvent(kAxisActionWalkLeft);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_X-");
+		gameKeyMap->addAction(act);
+
+		act = new Action("WALKRIGHT", _("Walk right"));
+		act->setCustomBackendActionAxisEvent(kAxisActionWalkRight);
+		act->addDefaultInputMapping("JOY_LEFT_STICK_X+");
+		gameKeyMap->addAction(act);
+
 		if (gameId == "simon2") {
 			act = new Action("BACKGRNDSND", _("Toggle background sounds"));
 			act->setCustomEngineActionEvent(kActionToggleBackgroundSound);

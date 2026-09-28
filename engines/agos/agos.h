@@ -113,6 +113,14 @@ enum AGOSAction {
 	kActionFocusRight
 };
 
+// Axes of the stick that walks the player's character
+enum AGOSAxisAction {
+	kAxisActionWalkUp,
+	kAxisActionWalkDown,
+	kAxisActionWalkLeft,
+	kAxisActionWalkRight
+};
+
 uint fileReadItemID(Common::SeekableReadStream *in);
 
 #define CHECK_BOUNDS(x, y) assert((uint)(x) < ARRAYSIZE(y))
@@ -628,6 +636,17 @@ protected:
 	Common::String _secondScreenSprites;
 	uint32 _secondScreenSpritesTime;
 	void focusNextBox(int dirX, int dirY);
+
+	// Walking the player's character with a stick, see secondscreen.cpp
+	int16 _walkStickX, _walkStickY;
+	bool _stickWalking;
+	uint32 _lastStickWalk;
+	Common::Point _stickWalkStep;
+	Common::Point _stickBlockedPos;
+	uint32 _stickBlockedSince;
+	bool _stickClickedExit;
+	bool findPlayer(Common::Point &pos);
+	bool updateStickWalk();
 	HitArea *_hitAreaList;
 
 	AnimTable _screenAnim1[90];

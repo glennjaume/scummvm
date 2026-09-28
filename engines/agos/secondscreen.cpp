@@ -482,4 +482,140 @@ void AGOSEngine::focusNextBox(int dirX, int dirY) {
 	_system->getEventManager()->pushEvent(move);
 }
 
+bool AGOSEngine::findPlayer(Common::Point &pos) {
+	// Simon is drawn from one or more sprites of zone 11, at x in units of
+	// 8 pixels. Find where his feet are on the screen.
+	Common::Rect bounds;
+	for (const VgaSprite *vsp = _vgaSprites; vsp < _vgaSprites + ARRAYSIZE(_vgaSprites) && vsp->id != 0; vsp++) {
+		if (vsp->zoneNum != 11 || vsp->image <= 0)
+			continue;
+		const byte *header = _vgaBufferPointers[vsp->zoneNum].vgaFile2;
+		if (!header)
+			continue;
+		header += vsp->image * 8;
+		const int w = READ_BE_UINT16(header + 6) / 16 * 16;
+		const int h = header[5];
+		if (w <= 0 || h <= 0)
+			continue;
+		const int x = (vsp->x - _scrollX) * 8;
+		const Common::Rect r(x, vsp->y, x + w, vsp->y + h);
+		if (bounds.isEmpty())
+			bounds = r;
+		else
+			bounds.extend(r);
+	}
+	if (bounds.isEmpty() || bounds.right <= 0 || bounds.left >= _screenWidth)
+		return false;
+	pos = Common::Point((bounds.left + bounds.right) / 2, MIN<int>(bounds.bottom, kInterfaceTop) - 1);
+	return true;
+}
+
+// Click a box in the room with the walk verb, as if the player had
+// clicked there. For the floor, x and y are where to walk to.
+static HitArea *findRoomBox(HitArea *hitAreas, uint count, int x, int y, bool floor) {
+	HitArea *best = nullptr;
+	for (uint i = 0; i < count; i++) {
+		HitArea *ha = &hitAreas[i];
+		if (!(ha->flags & kBFBoxInUse) || (ha->flags & kBFBoxDead) || ha->id == 0 ||
+		    x < ha->x || y < ha->y || x >= ha->x + ha->width || y >= ha->y + ha->height)
+			continue;
+		// The floor is the box behind everything else; otherwise take the
+		// one in front, as a click would
+		if (!best || (floor ? ha->priority < best->priority : ha->priority >= best->priority))
+			best = ha;
+	}
+	return best;
+}
+
+bool AGOSEngine::updateStickWalk() {
+	// Walk Simon towards where the stick points, by clicking the floor a
+	// little way ahead of him every few frames. The game's own path finding
+	// keeps him inside the room.
+	const int deadZone = 8000;
+	const bool held = ABS(_walkStickX) > deadZone || ABS(_walkStickY) > deadZone;
+
+	Common::Point pos;
+	if ((getGameType() != GType_SIMON1 && getGameType() != GType_SIMON2) || _mouseHideCount ||
+	    (getGameType() == GType_SIMON2 && getBitFlag(79)) || !findPlayer(pos)) {
+		_stickWalking = false;
+		return false;
+	}
+
+	// Leave Simon where he is during conversations
+	Common::Array<Common::Rect> boxes;
+	bool dialog = false;
+	Common::Rect inventory;
+	if (held && getInterfaceBoxes(boxes, dialog, inventory) && dialog)
+		return false;
+
+	const uint32 now = _system->getMillis();
+	Common::Point target;
+	HitArea *box = nullptr;
+	if (!held) {
+		// Stop just ahead, rather than at the last target
+		_stickClickedExit = false;
+		if (!_stickWalking)
+			return false;
+		_stickWalking = false;
+		target = pos + Common::Point(_stickWalkStep.x / 8, _stickWalkStep.y / 8);
+	} else {
+		const float length = sqrtf((float)_walkStickX * _walkStickX + (float)_walkStickY * _walkStickY);
+		const int lookAhead = 32;
+		const Common::Point step((int)(lookAhead * _walkStickX / length), (int)(lookAhead * _walkStickY / length));
+
+		// Exits are objects clicked rather than places walked to. When Simon
+		// is held against the edge of where he can walk, click whatever is
+		// just ahead, once per push.
+		if (_stickWalking && pos == _stickBlockedPos) {
+			if (!_stickClickedExit && now - _stickBlockedSince >= 400) {
+				_stickClickedExit = true;
+				target = pos + step;
+				box = findRoomBox(_hitAreas, ARRAYSIZE(_hitAreas), target.x, target.y, false);
+				if (box && box == findRoomBox(_hitAreas, ARRAYSIZE(_hitAreas), target.x, target.y, true))
+					box = nullptr;
+				if (!box)
+					return false;
+			}
+		} else if (pos != _stickBlockedPos) {
+			_stickBlockedPos = pos;
+			_stickBlockedSince = now;
+			_stickClickedExit = false;
+		}
+
+		if (!box) {
+			if (_stickWalking && now - _lastStickWalk < 300 &&
+			    ABS(step.x - _stickWalkStep.x) + ABS(step.y - _stickWalkStep.y) < lookAhead / 2)
+				return false;
+			_stickWalking = true;
+			_lastStickWalk = now;
+			_stickWalkStep = step;
+			target = pos + step;
+		}
+	}
+
+	// Box coordinates are in the room, which scrolls in Simon 2
+	const int scroll = (getGameType() == GType_SIMON2) ? _scrollX * 8 : 0;
+	target.x = CLIP<int>(target.x, 0, _screenWidth - 1);
+	target.y = CLIP<int>(target.y, 0, kInterfaceTop - 1);
+	if (!box)
+		box = findRoomBox(_hitAreas, ARRAYSIZE(_hitAreas), target.x + scroll, target.y, true);
+	if (!box)
+		return false;
+
+	// Walk, whatever verb the pointer would pick where it is now
+	HitArea *walk = findBox(101);
+	if (!walk || (walk->flags & kBFBoxDead))
+		return false;
+	_verbHitArea = walk->verb;
+	setVerb(walk);
+	_defaultVerb = 101;
+
+	debug(1, "AGOS stick walk: from %d,%d to %d,%d box %d", pos.x, pos.y, target.x, target.y, box->id);
+	_lastHitArea = box;
+	_lastHitArea3 = box;
+	_variableArray[1] = target.x;
+	_variableArray[2] = target.y;
+	return true;
+}
+
 } // End of namespace AGOS
